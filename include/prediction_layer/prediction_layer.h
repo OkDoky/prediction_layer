@@ -45,9 +45,20 @@
 
 #include <obstacle_detector/Obstacles.h>
 
+#include <circle_to_circumscribe_polygon.h>
+
+
 
 namespace prediction_layer
 {
+  struct PointInt
+  {
+    int x;
+    int y;
+  };
+
+  using Polygon = std::vector<geometry_msgs::Point>;
+  
   class PredictionLayer : public costmap_2d::Layer
   {
     public:
@@ -111,6 +122,10 @@ namespace prediction_layer
       void reconfigureCB(PredictionLayerConfig &config, uint32_t level);
       void resetLayerCallback(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res);
       void ObstaclesCallback(const obstacle_detector::Obstacles& msg);
+      inline int getSign(duoble x) return ( x > 0 ? 1 : -1);
+
+      obstacle_detector::Obstacles _obstacles;
+      obstacle_detector::Obstacles _dist_range_obstacles, _path_range_obstacles, _emergency_range_obstcles;
 
       dynamic_reconfigure::Server<PredictionLayerConfig>* _dsrv; 
       std::mutex _data_mutex;
@@ -120,5 +135,6 @@ namespace prediction_layer
 
       ros::Subscriber obstacles_sub_;
       ros::ServiceServer reset_layer_;
+      ros::Publisher polygon_pub_;
   }
 }
