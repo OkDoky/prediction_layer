@@ -14,7 +14,7 @@
   <build_depend>geometry_msgs</build_depend>
   <build_depend>pluginlib</build_depend>
   <build_depend>roscpp</build_depend>
-  <build_depend>rxros</build_depend>
+  <!-- <build_depend>rxros</build_depend> -->
   <build_depend>sensor_msgs</build_depend>
   <build_depend>tf2_ros</build_depend>
   <build_depend>obstacle_detector</build_depend>
@@ -23,7 +23,7 @@
   <build_export_depend>geometry_msgs</build_export_depend>
   <build_export_depend>pluginlib</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
-  <build_export_depend>rxros</build_export_depend>
+  <!-- <build_export_depend>rxros</build_export_depend> -->
   <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>tf2_ros</build_export_depend>
   <build_export_depend>obstacle_detector</build_export_depend>
@@ -32,7 +32,7 @@
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>pluginlib</exec_depend>
   <exec_depend>roscpp</exec_depend>
-  <exec_depend>rxros</exec_depend>
+  <!-- <exec_depend>rxros</exec_depend> -->
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>obstacle_detector</exec_depend>

@@ -7,9 +7,10 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   pluginlib
   roscpp
-  rxros
+  # rxros
   sensor_msgs
   tf2_ros
+  obstacle_detector
 )
 
 generate_dynamic_reconfigure_options(cfg/PredictionLayer.cfg)
@@ -17,7 +18,7 @@ generate_dynamic_reconfigure_options(cfg/PredictionLayer.cfg)
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES prediction_layer
- CATKIN_DEPENDS costmap_2d dynamic_reconfigure geometry_msgs pluginlib roscpp rxros sensor_msgs tf2_ros obstacle_detector
+ CATKIN_DEPENDS costmap_2d dynamic_reconfigure geometry_msgs pluginlib roscpp sensor_msgs tf2_ros obstacle_detector
  DEPENDS system_lib
 )
 
