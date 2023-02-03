@@ -1,0 +1,6 @@
+<library path="libprediction_layer">
+    <class type="prediction_layer::PredictionLayer" base_class_type="costmap_2d::Layer">
+        <description>Using LaserScan data and Kalman filter to predict obstacle position costmap_2d</description>
+    </class>
+</library>
+  

@@ -24,19 +24,35 @@
  * Author: OkDoky
  **********************************************************************************************/
 
+#ifndef obstacles_ROS_TRANSFORMS_H_
+#define obstacles_ROS_TRANSFORMS_H_
 
-#include <math.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <map>
-
-#include <ros/ros.h>
-#include <obstacle_detector/Obstacles.h>
-#include <obstacle_detector/CircleObstacle.h>
 #include <geometry_msgs/Polygon.h>
+#include <geometry_msgs/Point32.h>
+#include <tf/transform_datatypes.h>
+#include <tf/transform_listener.h>
 
-void circleToCircumscribePolygon(const obstacle_detector::CircleObstacle circle, 
-                                    geometry_msgs::Polygon &polygon);
-void circleToCircumscribePolygon(const obstacle_detector::CircleObstacle circle, 
-                                    geometry_msgs::Polygon &polygon,
-                                    std::map<std::string, double> &offsets);
+#include <prediction_layer/dynamic_obstacles.h>
+
+namespace prediction_layer
+{
+  void transformPolygonWithNormals (const geometry_msgs::Polygon &polygon_in,
+                                    const std::string source_frame,
+                                    geometry_msgs::Polygon &polygon_out,
+                                    const std::string target_frame,
+                                    const tf::Transform &transform);
+
+  void transformPolygon (const geometry_msgs::Polygon &polygon_in,
+                         const std::string source_frame,
+                         geometry_msgs::Polygon &polygon_out,
+                         const std::string target_frame,
+                         const tf::Transform &transform);
+                         
+  void transformAsMatrix (const tf::Transform& bt, Eigen::Matrix4f &out_mat);
+
+  void transformAsMatrix (const geometry_msgs::Tranform& bt, Eigen::Matrix4f &out_mat);
+  void transformCircles (const std::string new_global_frame, 
+                         const prediction_layer::DynamicObstacles& obs_in, 
+                         prediction_layer::DynamicObstacles& obs_out, 
+                         const tf::TransformListener& tf_);
+}

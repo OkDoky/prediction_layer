@@ -39,6 +39,6 @@
 
 
   <export>
-    <costmap_2d plugin="${prefix}/prediction_layer_plugins.xml"/>
+    <costmap_2d plugin="${prefix}/costmap_plugins.xml"/>
   </export>
 </package>

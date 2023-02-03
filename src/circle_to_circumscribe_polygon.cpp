@@ -24,97 +24,92 @@
  * Author: OkDoky
  **********************************************************************************************/
 
-#include <circle_to_circumscribe_polygon.h>
+#include <prediction_layer/circle_to_circumscribe_polygon.h>
 
-namespace prediction_layer
+
+void circleToCircumscribePolygon(const obstacle_detector::CircleObstacle circle, 
+                                        geometry_msgs::Polygon &polygon)
 {
-    class ObstacleToPolygon:
-    {
-        void circleToCircumscribePolygon(const obstacle_detector::CircleObstacle circle, 
-                                             std::vector<geometry_msgs::Point> &polygon)
-        {
-            double c_x, c_y, c_theta;
-            c_x = circle.center.x;
-            c_y = circle.center.y;
-            c_theta = atan2(circle.velocity.y, circle.velocity.x);
-            
-            double radius;
-            radius = circle.radius;
-            
-            double front_offset, rear_offset, right_offset, left_offset;
-            front_offset = 0.0;
-            rear_offset = 0.0;
-            right_offset = 0.0;
-            left_offset = 0.0;
-            
-            double _right, _left, _rear, _front;
-            _right = radius + right_offset;
-            _left = radius + left_offset;
-            _front = radius + front_offset;
-            _rear = radius + rear_offset;
+    double c_x, c_y, c_theta;
+    c_x = circle.center.x;
+    c_y = circle.center.y;
+    c_theta = atan2(circle.velocity.y, circle.velocity.x);
+    
+    double radius;
+    radius = circle.radius;
+    
+    double front_offset, rear_offset, right_offset, left_offset;
+    front_offset = 0.0;
+    rear_offset = 0.0;
+    right_offset = 0.0;
+    left_offset = 0.0;
+    
+    double _right, _left, _rear, _front;
+    _right = radius + right_offset;
+    _left = radius + left_offset;
+    _front = radius + front_offset;
+    _rear = radius + rear_offset;
 
-            int _edge = 4;
-            *polygon.assign(_edge, geometry_msgs::Point);
+    // int _edge = 4;
+    // polygon.assign(_edge, geometry_msgs::Point);
 
-            geometry_msgs::Point point_rear_left, point_rear_right, point_front_right, point_front_left;
-            point_front_left.x  = c_x - (_front) * cos(c_theta) - (_left) * sin(c_theta);
-            point_front_left.y  = c_y - (_front) * sin(c_theta) + (_left) * cos(c_theta);
-            point_front_right.x = c_x - (_front) * cos(c_theta) + (_right) * sin(c_theta);
-            point_front_right.y = c_y - (_front) * sin(c_theta) - (_right) * cos(c_theta);
-            point_rear_right.x  = c_x + (_rear) * cos(c_theta)  + (_right) * sin(c_theta);
-            point_rear_right.y  = c_y + (_rear) * sin(c_theta)  - (_right) * cos(c_theta);
-            point_rear_left.x   = c_x + (_rear) * cos(c_theta)  - (_left) * sin(c_theta);
-            point_rear_left.y   = c_y + (_rear) * sin(c_theta)  + (_left) * cos(c_theta);
-            polygon.points.push_bash(point_rear_left);
-            polygon.points.push_back(point_rear_right);
-            polygon.points.push_back(point_front_right);
-            polygon.points.push_back(point_front_left);
-        }
+    geometry_msgs::Point32 point_rear_left, point_rear_right, point_front_right, point_front_left;
+    point_front_left.x  = c_x - (_front) * cos(c_theta) - (_left) * sin(c_theta);
+    point_front_left.y  = c_y - (_front) * sin(c_theta) + (_left) * cos(c_theta);
+    point_front_right.x = c_x - (_front) * cos(c_theta) + (_right) * sin(c_theta);
+    point_front_right.y = c_y - (_front) * sin(c_theta) - (_right) * cos(c_theta);
+    point_rear_right.x  = c_x + (_rear) * cos(c_theta)  + (_right) * sin(c_theta);
+    point_rear_right.y  = c_y + (_rear) * sin(c_theta)  - (_right) * cos(c_theta);
+    point_rear_left.x   = c_x + (_rear) * cos(c_theta)  - (_left) * sin(c_theta);
+    point_rear_left.y   = c_y + (_rear) * sin(c_theta)  + (_left) * cos(c_theta);
+    polygon.points.push_back(point_rear_left);
+    polygon.points.push_back(point_rear_right);
+    polygon.points.push_back(point_front_right);
+    polygon.points.push_back(point_front_left);
+}
 
-        void circleToCircumscribePolygon(const obstacle_detector::CircleObstacle circle, 
-                                             std::vector<geometry_msgs::Point> &polygon,
-                                             std::map<string, double> &offsets)
-        {
-            double c_x, c_y, c_theta;
-            c_x = circle.center.x;
-            c_y = circle.center.y;
-            c_theta = atan2(circle.velocity.y, circle.velocity.x);
+void circleToCircumscribePolygon(const obstacle_detector::CircleObstacle circle, 
+                                        geometry_msgs::Polygon &polygon,
+                                        std::map<std::string, double> &offsets)
+{
+    double c_x, c_y, c_theta;
+    c_x = circle.center.x;
+    c_y = circle.center.y;
+    c_theta = atan2(circle.velocity.y, circle.velocity.x);
 
-            double radius;
-            radius = circle.radius;
+    double radius;
+    radius = circle.radius;
 
-            double front_offset, rear_offset, right_offset, left_offset;
-            front_offset = offsets['front'];
-            rear_offset = offsets['rear'];
-            right_offset = offsets['right'];
-            left_offset = offsets['left'];
+    double front_offset, rear_offset, right_offset, left_offset;
+    front_offset = offsets["front"];
+    rear_offset = offsets["rear"];
+    right_offset = offsets["right"];
+    left_offset = offsets["left"];
 
-            double _right, _left, _rear, _front;
-            _right = radius + right_offset;
-            _left = radius + left_offset;
-            _front = radius + front_offset;
-            _rear = radius + rear_offset;
+    double _right, _left, _rear, _front;
+    _right = radius + right_offset;
+    _left = radius + left_offset;
+    _front = radius + front_offset;
+    _rear = radius + rear_offset;
 
-            int _edge = 4;
-            *polygon.assign(_edge, geometry_msgs::Point);
+    // int _edge = 4;
+    // polygon.assign(_edge, geometry_msgs::Point);
 
-            geometry_msgs::Point point_rear_left, point_rear_right, point_front_right, point_front_left;
-            point_front_left.x  = c_x - (_front) * cos(c_theta) - (_left) * sin(c_theta);
-            point_front_left.y  = c_y - (_front) * sin(c_theta) + (_left) * cos(c_theta);
-            point_front_right.x = c_x - (_front) * cos(c_theta) + (_right) * sin(c_theta);
-            point_front_right.y = c_y - (_front) * sin(c_theta) - (_right) * cos(c_theta);
-            point_rear_right.x  = c_x + (_rear) * cos(c_theta)  + (_right) * sin(c_theta);
-            point_rear_right.y  = c_y + (_rear) * sin(c_theta)  - (_right) * cos(c_theta);
-            point_rear_left.x   = c_x + (_rear) * cos(c_theta)  - (_left) * sin(c_theta);
-            point_rear_left.y   = c_y + (_rear) * sin(c_theta)  + (_left) * cos(c_theta);
-            polygon.points.push_bash(point_rear_left);
-            polygon.points.push_back(point_rear_right);
-            polygon.points.push_back(point_front_right);
-            polygon.points.push_back(point_front_left);
-            std::cout << "rear left : \n x : %f, y : %f\n 
-                          rear right : \n x : %f, y : %f\n 
-                          front right : \n x : %f, y : %f\n 
-                          front left : \n x : %f, y : %f\n" << std::endl;
-        }
-    }
+    geometry_msgs::Point32 point_rear_left, point_rear_right, point_front_right, point_front_left;
+    point_front_left.x  = c_x - (_front) * cos(c_theta) - (_left) * sin(c_theta);
+    point_front_left.y  = c_y - (_front) * sin(c_theta) + (_left) * cos(c_theta);
+    point_front_right.x = c_x - (_front) * cos(c_theta) + (_right) * sin(c_theta);
+    point_front_right.y = c_y - (_front) * sin(c_theta) - (_right) * cos(c_theta);
+    point_rear_right.x  = c_x + (_rear) * cos(c_theta)  + (_right) * sin(c_theta);
+    point_rear_right.y  = c_y + (_rear) * sin(c_theta)  - (_right) * cos(c_theta);
+    point_rear_left.x   = c_x + (_rear) * cos(c_theta)  - (_left) * sin(c_theta);
+    point_rear_left.y   = c_y + (_rear) * sin(c_theta)  + (_left) * cos(c_theta);
+    polygon.points.push_back(point_rear_left);
+    polygon.points.push_back(point_rear_right);
+    polygon.points.push_back(point_front_right);
+    polygon.points.push_back(point_front_left);
+    std::cout << "rear left : x : " << point_rear_left.x << ", y : " << point_rear_left.y << std::endl;
+    std::cout << "rear right : x : " << point_rear_right.x << ", y : " << point_rear_right.y << std::endl; 
+    std::cout << "front right : x : " << point_front_right.x << ", y : " << point_front_right.y << std::endl; 
+    std::cout << "front left : x : " << point_front_left.x << ", y : " << point_front_left.y << std::endl;
 }

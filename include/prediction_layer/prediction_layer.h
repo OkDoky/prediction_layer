@@ -29,12 +29,14 @@
 #define PRECINTION_LAYER_H_
 
 #include <mutex>
+#include <vector>
 
 #include <ros/ros.h>
 
 #include <costmap_2d/costmap_layer.h>
 #include <costmap_2d/layered_costmap.h>
 #include <costmap_2d/footprint.h>
+#include <costmap_2d/costmap_2d.h>
 
 #include <std_srvs/Trigger.h>
 #include <nav_msgs/OccupancyGrid.h>
@@ -44,10 +46,35 @@
 #include <dynamic_reconfigure/server.h>
 
 #include <obstacle_detector/Obstacles.h>
+#include <geometry_msgs/Pose2D.h>
 
-#include <circle_to_circumscribe_polygon.h>
+#include <prediction_layer/circle_to_circumscribe_polygon.h>
+#include <prediction_layer/PredictionLayerConfig.h>
 
 
+inline int getSign(double x) 
+{
+  return x > 0 ? 1 : -1;
+}
+
+double pointToPoint(double x1, double y1, double x2, double y2)
+{
+  double dx = x1-x2;
+  double dy = y1-y2;
+  double dist;
+
+  dist = pow(dx,2) + pow(dy,2);
+  dist = sqrt(dist);
+  
+  return dist;
+}
+
+double localPointToPoint(double x1, double y1)
+{
+  double dist;
+  dist = pow(x1,2) + pow(y1,2);
+  return sqrt(dist);
+}
 
 namespace prediction_layer
 {
@@ -59,7 +86,7 @@ namespace prediction_layer
 
   using Polygon = std::vector<geometry_msgs::Point>;
   
-  class PredictionLayer : public costmap_2d::Layer
+  class PredictionLayer : public costmap_2d::CostmapLayer
   {
     public:
       /**
@@ -104,31 +131,43 @@ namespace prediction_layer
        * @param max_i 
        * @param max_j 
        */
-      virtual void updateCosts(costamp_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j);
+      virtual void updateCosts(costmap_2d::Costmap2D& master_grid, int min_i, int min_j, int max_i, int max_j);
 
       bool rolling_window_;
       double _robot_x, _robot_y, _robot_yaw;
 
-      nav_msgs::Odometry odom;
       std::vector<obstacle_detector::CircleObstacle> circle_obstacles;
       
       double obstacle_range_;
       ros::Time data_update_time;
       ros::Duration data_update_duration;
+      double callback_data_patience_;
       bool initialize_;
 
     private:
       virtual void reset();
-      void reconfigureCB(PredictionLayerConfig &config, uint32_t level);
-      void resetLayerCallback(std_srvs::Trigger::Request& req, std_srvs::Trigger::Response& res);
-      void ObstaclesCallback(const obstacle_detector::Obstacles& msg);
-      inline int getSign(duoble x) return ( x > 0 ? 1 : -1);
+      void reconfigureCB(PredictionLayerConfig &config, 
+                         uint32_t level);
+      bool resetLayerCallback(std_srvs::Trigger::Request& req, 
+                              std_srvs::Trigger::Response& res);
+      void ObstaclesCallback(const obstacle_detector::Obstacles msg);
+      void rasterizePolygon(const std::vector<PointInt> &polygon,
+                            std::vector<PointInt> &polygon_cells);
+      void setPolygonCost(costmap_2d::Costmap2D &master_grid, 
+                          const geometry_msgs::Polygon &polygon,
+                          int min_i, int min_j, int max_i, int max_j);
+      void polygonOutlineCells(const std::vector<PointInt> &polygon,
+                               std::vector<PointInt> &polygon_cells);
+      void raytrace(int x0, int y0, int x1, int y1, 
+                    std::vector<PointInt> &cells);
 
       obstacle_detector::Obstacles _obstacles;
       obstacle_detector::Obstacles _dist_range_obstacles, _path_range_obstacles, _emergency_range_obstcles;
 
       dynamic_reconfigure::Server<PredictionLayerConfig>* _dsrv; 
       std::mutex _data_mutex;
+
+      std::string source_frame;
       double _costmap_resolution;
       double _min_x, _min_y, _max_x, _max_y;
       boost::recursive_mutex lock_;
@@ -136,5 +175,13 @@ namespace prediction_layer
       ros::Subscriber obstacles_sub_;
       ros::ServiceServer reset_layer_;
       ros::Publisher polygon_pub_;
-  }
+
+      // reconfigure config values
+      bool enabled_, footprint_clearing_enabled_;
+      double max_obstacle_range_;
+
+      // footprint
+      std::vector<geometry_msgs::Point> transformed_footprint_;      
+  };
 }
+#endif
