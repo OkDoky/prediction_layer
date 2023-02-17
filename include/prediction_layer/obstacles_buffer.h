@@ -32,15 +32,17 @@
 #include <list>
 #include <string>
 #include <ros/time.h>
-#include <prediction_layer/dynamic_obstacles.h>
-#include <prediction_layer/transforms.h>
+#include <prediction_layer/dynamic_obstacle.h>
 #include <obstacle_detector/CircleObstacle.h>
 #include <obstacle_detector/Obstacles.h>
-#include <tf/transform_listener.h>
-#include <tf/transform_datatypes.h>
+#include <geometry_msgs/PointStamped.h>
+#include <tf2_ros/buffer.h>
 
 // Thread support
 #include <boost/thread.hpp>
+
+using namespace obstacle_detector;
+using namespace std;
 
 namespace prediction_layer
 {
@@ -60,13 +62,13 @@ namespace prediction_layer
        * @param obstacle_range The range to which the objects to be trusted for inserting obstacles.
        * @param raytrace_range The range to which the objects to be trusted for raytracing to clear out space.
        * @param tf A reference to a TransformListener
-       * @param costmap_global_frame The frame to transform Obstacles
+       * @param global_frame The frame to transform Obstacles
        * @param source_frame The frame of the origin objects, can be left blank to be read from the messages.
        * @param tf_tolerance The amount of time to wait for a transform to be available when setting a new global frame
        */
-      ObstaclesBuffer(std::string topic_name, double observation_keep_time, double expected_update_rate,
-                      double obstacle_range, double raytrace_range, tf::TransformListener& tf, 
-                      std::string costmap_global_frame, std::string source_frame, double tf_tolerance);
+      ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
+                      double obstacle_range, double raytrace_range, tf2_ros::Buffer& tf2_buffer, 
+                      string global_frame, string source_frame, double tf_tolerance);
       
       /**
        * @brief Destroy the Obstacles Buffer object
@@ -81,20 +83,19 @@ namespace prediction_layer
        * @return true if operation succeded
        * @return false otherwise
        */
-      bool setGlobalFrame(const std::string new_global_frame);
+      bool setGlobalFrame(const string new_global_frame);
 
       /**
        * @brief Transforms a Obstacles to the global frame and buffers it
        * <b>Note: The burden is on the user to make sure the transform si available... ie they should use a MessageNotifier</b>
-       * @param obstacles The Obstacles to be buffered
+       * @param obs The Obstacles to be buffered
        */
-      void buffferObstacles(const obstacle_detector::CircleObstacle& obstacles);
-      
+      void bufferObstacles(const Obstacles& obs);
       /**
        * @brief Pushes copies of all current observations onto the end of the vector passed in.
        * @param obstacles The vector to be filled
        */
-      void getObstacles(prediction_layer::DynamicObstacles& dynamic_obstacles);
+      void getObstacles(vector<DynamicObstacle>& dynamic_obstacles);
       
       /**
        * @brief Check if the obstacle buffer is being update at its expected rate
@@ -116,7 +117,7 @@ namespace prediction_layer
        */
       inline void unlock()
       {
-        lock_.unlodk();
+        lock_.unlock();
       }
       
       /**
@@ -129,17 +130,19 @@ namespace prediction_layer
        */
       void purgeStaleObstacles();
 
-      tf::TransformListener& tf_;
+      tf2_ros::Buffer& tf2_buffer_;
       const ros::Duration observation_keep_time_;
       const ros::Duration expected_update_rate_;
 
       ros::Time last_updated_;
-      std::string costmap_global_frame_;
-      std::string source_frame_;
-      std::list<obstacle_detector::CircleObstacle> circle_list_;
-      std::string topic_name_;
+      string global_frame_;
+      string source_frame_;
+      list<CircleObstacle> circle_list_;
+      list<DynamicObstacle> observation_list_;
+      string topic_name_;
       boost::recursive_mutex lock_;
       double obstacle_range_, raytrace_range_;
       double tf_tolerance_;
-  }
+  };
 }
+#endif  // OBSTACLES_BUFFER_H_
