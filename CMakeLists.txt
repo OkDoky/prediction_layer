@@ -5,14 +5,19 @@ find_package(catkin REQUIRED COMPONENTS
   costmap_2d
   dynamic_reconfigure
   geometry_msgs
+  message_filters
+  message_generation
+  nav_msgs
   pluginlib
   roscpp
   # rxros
   sensor_msgs
   tf2_ros
+  tf2
   obstacle_detector
+  std_srvs
 )
-
+find_package(Boost REQUIRED COMPONENTS system thread)
 ## Enable C++11 support
 include(CheckCXXCompilerFlag)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORT_CXX11)
@@ -31,10 +36,26 @@ generate_dynamic_reconfigure_options(
 )
 
 catkin_package(
- INCLUDE_DIRS include
- LIBRARIES prediction_layer
- CATKIN_DEPENDS costmap_2d dynamic_reconfigure geometry_msgs pluginlib roscpp sensor_msgs tf2_ros obstacle_detector
- DEPENDS 
+ INCLUDE_DIRS 
+  include
+ LIBRARIES 
+  prediction_layer
+ CATKIN_DEPENDS 
+  costmap_2d 
+  dynamic_reconfigure 
+  geometry_msgs 
+  pluginlib 
+  roscpp 
+  sensor_msgs 
+  tf2_ros 
+  obstacle_detector
+  tf2
+  message_filters
+  message_generation
+  nav_msgs
+  std_srvs
+ DEPENDS
+  Boost 
 )
 
 ###########
@@ -42,13 +63,15 @@ catkin_package(
 ###########
 
 include_directories(
-  ${catkin_INCLUDE_DIRS} include
+  include
+  ${catkin_INCLUDE_DIRS} 
+  ${Boost_INCLUDE_DIRS}
 )
 
 add_library(
   prediction_layer 
   src/prediction_layer.cpp
-  src/circle_to_circumscribe_polygon.cpp
+  src/obstacles_buffer.cpp
 )
 target_link_libraries(
   prediction_layer 
@@ -58,13 +81,8 @@ target_link_libraries(
 add_dependencies(
   prediction_layer 
   ${prediction_layer_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
 )
-
-# add_executable(
-#   prediction_layer_node
-#   src/prediction_layer.cpp
-#   # src/circle_to_circumscribe_polygon.cpp
-# )
 
 install(TARGETS prediction_layer
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
