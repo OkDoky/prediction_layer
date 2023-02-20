@@ -36,7 +36,9 @@
 #include <obstacle_detector/CircleObstacle.h>
 #include <obstacle_detector/Obstacles.h>
 #include <geometry_msgs/PointStamped.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/buffer.h>
+#include <tf2/transform_datatypes.h>
 
 // Thread support
 #include <boost/thread.hpp>

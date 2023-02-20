@@ -152,6 +152,7 @@ namespace prediction_layer
       void reconfigureCB(PredictionLayerConfig &config, uint32_t level);
       ros::ServiceServer reset_layer_;
       bool initialize_, enabled_;
+      double obstacle_range_, raytrace_range_;
   };
 }
 #endif

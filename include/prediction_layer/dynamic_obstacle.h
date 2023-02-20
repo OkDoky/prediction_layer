@@ -47,7 +47,8 @@ namespace prediction_layer
      * @brief  Creates an empty dynamic obstacles
      */
     DynamicObstacle() :
-      obs_(), obstacle_range_(0.0), raytrace_range_(0.0)
+      obs_(), 
+      updated_time_(ros::Time::now())
     {
     }
 
@@ -59,17 +60,11 @@ namespace prediction_layer
      * @brief  Creates an observation from an origin point and a obs
      * @param origin The origin point of the observation
      * @param obs The point obs of the observation
-     * @param obstacle_range The range out to which an observation should be able to insert obstacles
-     * @param raytrace_range The range out to which an observation should be able to clear via raytracing
      */
     DynamicObstacle(geometry_msgs::Point& origin,
-                    std::vector<CircleObstacle> obs,
-                    double obstacle_range, 
-                    double raytrace_range) :
+                    std::vector<CircleObstacle> obs) :
         origin_(origin),
         obs_(obs),
-        obstacle_range_(obstacle_range), 
-        raytrace_range_(raytrace_range),
         updated_time_(ros::Time::now())
     {
     }
@@ -81,8 +76,6 @@ namespace prediction_layer
     DynamicObstacle(const DynamicObstacle& obs) :
         origin_(obs.origin_), 
         obs_(obs.obs_),
-        obstacle_range_(obs.obstacle_range_), 
-        raytrace_range_(obs.raytrace_range_),
         updated_time_(ros::Time::now())
     {
     }
@@ -92,18 +85,15 @@ namespace prediction_layer
      * @param obs The point obs of the observation
      * @param obstacle_range The range out to which an observation should be able to insert obstacles
      */
-    DynamicObstacle(std::vector<CircleObstacle> obs, 
-                    double obstacle_range) :
+    DynamicObstacle(std::vector<CircleObstacle> obs) :
+        origin_(),
         obs_(obs), 
-        obstacle_range_(obstacle_range), 
-        raytrace_range_(0.0),
         updated_time_(ros::Time::now())
     {
     }
 
     geometry_msgs::Point origin_;
     std::vector<CircleObstacle> obs_;
-    double obstacle_range_, raytrace_range_;
     ros::Time updated_time_;
   };  // class DynamicObstacles
 
