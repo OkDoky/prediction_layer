@@ -99,14 +99,14 @@ namespace prediction_layer
     string raytrace_range_param_name, obstacle_range_param_name;
 
     // get the obstacle range for the sensor
-    double obstacle_range = 2.5;
+    obstacle_range_ = 2.5;
     if (nh.searchParam("obstacle_range", obstacle_range_param_name))
-      nh.getParam(obstacle_range_param_name, obstacle_range);
+      nh.getParam(obstacle_range_param_name, obstacle_range_);
     
     // get the raytrace range for the sensor
-    double raytrace_range = 3.0;
+    raytrace_range_ = 3.0;
     if (nh.searchParam("raytrace_range", raytrace_range_param_name))
-      nh.getParam(raytrace_range_param_name, raytrace_range);
+      nh.getParam(raytrace_range_param_name, raytrace_range_);
     
     ROS_WARN("[ObstacleLayer] Creating an observation buffer for source %s, topic %s, frame %s", 
       topic.c_str(), topic.c_str(), source_frame.c_str());
@@ -116,7 +116,7 @@ namespace prediction_layer
       observation_buffers_.push_back(
         boost::shared_ptr<ObstaclesBuffer
             > (new ObstaclesBuffer(topic, observation_keep_time, expected_update_rate,
-                                obstacle_range, raytrace_range, *tf_, global_frame_,
+                                obstacle_range_, raytrace_range_, *tf_, global_frame_,
                                 source_frame, transform_tolerance)));
       
       // check if we'll add this buffer to our marking observation buffers
@@ -255,12 +255,15 @@ namespace prediction_layer
         touch(px, py, min_x, min_y, max_x, max_y);
       }
     }
+    ROS_WARN("[updateBounds] after fillout new obstacles to costmap");
     updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
+    ROS_WARN("[updateBounds] update footprint");
   }
 
   void PredictionLayer::updateFootprint(double robot_x, double robot_y, double robot_yaw,
                                         double* min_x, double* min_y, double* max_x, double* max_y)
   {
+    ROS_WARN("[updateFootprint] get in update footprint");
     if (!footprint_clearing_enabled_) return;
     transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(), transformed_footprint_);
 
@@ -268,6 +271,7 @@ namespace prediction_layer
     {
       touch(transformed_footprint_[i].x, transformed_footprint_[i].y, min_x, min_y, max_x, max_y);
     }
+    ROS_WARN("[updateFootprint] finish update footprint");
   }
 
   void PredictionLayer::updateCosts(costmap_2d::Costmap2D &master_grid, 
@@ -278,6 +282,7 @@ namespace prediction_layer
     if (!enabled_)
       return;
 
+    ROS_WARN("[updateCosts] get in update costs");
     if (footprint_clearing_enabled_)
     {
       setConvexPolygonCost(transformed_footprint_, costmap_2d::FREE_SPACE);
@@ -286,9 +291,11 @@ namespace prediction_layer
     switch (combination_method_)
     {
       case 0:  // Overwrite
+        ROS_WARN("[updateCosts] case 0 update WithOverwrite");
         updateWithOverwrite(master_grid, min_i, min_j, max_i, max_j);
         break;
       case 1:  // Maximum
+        ROS_WARN("[updateCosts] case 1 update WithMax");
         updateWithMax(master_grid, min_i, min_j, max_i, max_j);
         break;
       default:  // Nothing
@@ -412,12 +419,12 @@ namespace prediction_layer
       if (!worldToMap(wx, wy, x1, y1))
         continue;
 
-      unsigned int cell_raytrace_range = cellDistance(clearing_observation.raytrace_range_);
+      unsigned int cell_raytrace_range = cellDistance(raytrace_range_);
       Costmap2D::MarkCell marker(costmap_, FREE_SPACE);
       // and finally... we can execute our trace to clear obstacles alone that line
       Costmap2D::raytraceLine(marker, x0, y0, x1, y1, cell_raytrace_range);
       
-      updateRaytraceBounds(ox, oy, wx, wy, clearing_observation.raytrace_range_, min_x, min_y, max_x, max_y);
+      updateRaytraceBounds(ox, oy, wx, wy, raytrace_range_, min_x, min_y, max_x, max_y);
     }
   }
 
