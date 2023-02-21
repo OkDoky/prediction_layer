@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   obstacle_detector
   std_srvs
+  tf2_geometry_msgs
 )
 find_package(Boost REQUIRED COMPONENTS system thread)
 ## Enable C++11 support
@@ -54,6 +55,7 @@ catkin_package(
   message_generation
   nav_msgs
   std_srvs
+  tf2_geometry_msgs
  DEPENDS
   Boost 
 )
