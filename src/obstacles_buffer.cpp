@@ -99,112 +99,33 @@ namespace prediction_layer
     return true;
   }
 
-  /* void ObstaclesBuffer::bufferObstacles(const Obstacles& obs)
-  {
-    geometry_msgs::PointStamped global_origin, local_origin;
-    observation_list_.push_front(DynamicObstacle());
-    string origin_frame = source_frame_ == "" ? obs.header.frame_id : source_frame_;
-    // transform origin data
-    //check canTransform
-    try
-    {
-      string tf_error;
-      ROS_WARN("[bufferObstacles] check can transform with global frame and local_frame g : %s, l : %s",global_frame_.c_str(), origin_frame.c_str());
-      if (!tf2_buffer_.canTransform(global_frame_, origin_frame, obs.header.stamp, ros::Duration(0.1), &tf_error))
-      {  
-        ROS_WARN("[bufferObstacles] Transform between %s and %s with tolerence %.2f failed: %s.",
-                  global_frame_.c_str(), origin_frame.c_str(), tf_tolerance_, tf_error.c_str());
-        return;
-      }
-    } 
-    catch(TransformException& ex)
-    {
-      ROS_WARN("[bufferObstacles] cannot Transform %s to %s, %s",origin_frame.c_str(), global_frame_.c_str(), ex.what());
-    }
-    catch(exception& e)
-    {
-      ROS_WARN("[bufferObstacles] what's the problem, %s", e.what());
-    }
-
-    try
-    {
-      local_origin.header.stamp = obs.header.stamp;
-      local_origin.header.frame_id = origin_frame;
-      local_origin.point.x = 0;
-      local_origin.point.y = 0;
-      local_origin.point.z = 0;
-      tf2_buffer_.transform(local_origin, global_origin, global_frame_);
-      ROS_WARN("[bufferObstacles] success to transform.");
-      tf2::convert(global_origin.point, observation_list_.front().origin_);
-      ROS_WARN("[bufferObstacles] success to convert.");
-      observation_list_.front().raytrace_range_ = raytrace_range_;
-      observation_list_.front().obstacle_range_ = obstacle_range_;
-
-      Obstacles  global_frame_obs;
-      ROS_WARN("[bufferObstacles] ready to transform obs..");
-
-      geometry_msgs::TransformStamped transform;
-      transform = tf2_buffer_.lookupTransform(global_frame_, origin_frame, obs.header.stamp, ros::Duration(0.1));
-
-      // tf2_buffer_.doTransform()
-      // tf2_buffer_.transform(obs, global_frame_obs, global_frame_);
-      ROS_WARN("[bufferObstacles] success to transform obs..");
-      global_frame_obs.header.stamp = obs.header.stamp;
-
-    }
-    catch (TransformException& ex)
-    {
-      observation_list_.pop_front();
-      ROS_ERROR("[PredictionLayer] TF Exception that should never happen for sensor frame: %s, obs frame: %s, %s", 
-                source_frame_.c_str(), obs.header.frame_id.c_str(), ex.what());
-      return;
-    }
-    last_updated_ = ros::Time::now();
-    purgeStaleObstacles();
-  } */
-
   void ObstaclesBuffer::bufferObstacles(const Obstacles& obs)
   {
+    ros::Time start_t = ros::Time::now();
     // init update target
     geometry_msgs::TransformStamped transform;
     string origin_frame = source_frame_ == "" ? obs.header.frame_id : source_frame_;
     geometry_msgs::Point local_origin, global_origin;
     Obstacles transformed_obs = obs;
-    
-    // 2222
     observation_list_.push_front(DynamicObstacle());
+    observation_list_.front().obs_ = transformed_obs.circles;
 
     // get lookuptransform form tf_buffer
     try
     {
-      ROS_WARN("[bufferObstacles] try to lookuptransform");
       transform = tf2_buffer_.lookupTransform(global_frame_, origin_frame, obs.header.stamp, ros::Duration(tf_tolerance_));
     } 
     catch(TransformException& ex)
     {
       ROS_WARN("[bufferObstacles] cannot Transform %s to %s, %s",origin_frame.c_str(), global_frame_.c_str(), ex.what());
-      
-      // 2222
       observation_list_.pop_front();
       return;
     }
-    ROS_WARN("[bufferObstacles] success to lookuptransform && start transform");
 
     try
     {
-      // DynamicObstacles.origin_
-
-      // 2222
       doTransform(local_origin, observation_list_.front().origin_, transform);
 
-      // re
-      // doTransform(local_origin, global_origin, transform);
-      ROS_WARN("[bufferObstacles] success to transform origins");
-      // DynamicObstacles.obs_
-      // re
-      // for (auto& circle : transformed_obs.circles)
-      
-      // 2222
       for (auto& circle : observation_list_.front().obs_)
       {
         geometry_msgs::Point transformed_center;
@@ -214,25 +135,19 @@ namespace prediction_layer
         circle.center = transformed_center;
         circle.velocity = transformed_velocity;
       }
-      // re
-      // transformed_obs.header = obs.header;
-      
-
-      ROS_WARN("[bufferObstacles] success to transform circles");
     }
     catch (TransformException& ex)
     {
-      // observation_list_.pop_front();
       ROS_ERROR("[PredictionLayer] TF Exception that should never happen for sensor frame: %s, obs frame: %s, %s", 
                 source_frame_.c_str(), obs.header.frame_id.c_str(), ex.what());
-      
-      // 2222
       observation_list_.pop_front();
       return;
     }
-    // observation_list_.push_front(DynamicObstacle(transformed_obs));
     last_updated_ = ros::Time::now();
     purgeStaleObstacles();
+    ros::Time end_t = ros::Time::now();
+    double c_time = (end_t - start_t).toSec();
+    ROS_DEBUG("[ObstaclesBuffer] bufferObstacles function cycle time : %.8f",c_time);
   }
 
   void ObstaclesBuffer::getObstacles(vector<DynamicObstacle>& dynamic_obstacles)
@@ -242,7 +157,7 @@ namespace prediction_layer
 
     // now we'll just copy the Obstacles for the caller
     list<DynamicObstacle>::iterator obs_it;
-    for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); ++obs_it)
+    for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); obs_it++)
     {
       dynamic_obstacles.push_back(*obs_it);
     }
@@ -271,6 +186,7 @@ namespace prediction_layer
 
   void ObstaclesBuffer::purgeStaleObstacles()
     {
+      // ROS_WARN("[PredictionLayer] before purgeStacleObstacles remain obstacles : %d", observation_list_.size());
       if (!observation_list_.empty())
       {
         list<DynamicObstacle>::iterator obs_it = observation_list_.begin();
@@ -298,6 +214,7 @@ namespace prediction_layer
           }
         }
       }
+      // ROS_WARN("[PredictionLayer] purgeStaleObstacles and remain obstacles : %d", observation_list_.size());
     }
   
 } // namespace prediction_layer
