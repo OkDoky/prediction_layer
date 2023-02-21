@@ -33,6 +33,7 @@ PLUGINLIB_EXPORT_CLASS(prediction_layer::PredictionLayer, costmap_2d::Layer)
 using costmap_2d::NO_INFORMATION;
 using costmap_2d::LETHAL_OBSTACLE;
 using costmap_2d::FREE_SPACE;
+using costmap_2d::INSCRIBED_INFLATED_OBSTACLE;
 
 using namespace costmap_2d;
 using namespace obstacle_detector;
@@ -74,9 +75,6 @@ namespace prediction_layer
     nh.param("object_source", topics_string, string(""));
     ROS_INFO("  Subscribed to Topics: %s", topics_string.c_str());
 
-
-
-
     double observation_keep_time, expected_update_rate;
     string topic, source_frame;
     bool inf_is_valid, clearing, marking;
@@ -88,6 +86,7 @@ namespace prediction_layer
     nh.getParam("inf_is_valid", inf_is_valid);
     nh.getParam("clearing", clearing);
     nh.getParam("marking", marking);
+    nh.getParam("combination_method", combination_method_);
     ROS_WARN("[PredictionLayer] object_source : %s",topic.c_str());
     ROS_WARN("[PredictionLayer] source_frame : %s",source_frame.c_str());
     ROS_WARN("[PredictionLayer] observation_persistence : %.2f",observation_keep_time);
@@ -155,7 +154,7 @@ namespace prediction_layer
       target_frames.push_back(source_frame);
       observation_notifiers_.back()->setTargetFrames(target_frames);
     }
-    
+
     dsrv_ = NULL;
     setupDynamicReconfigure(nh);
 
@@ -181,89 +180,78 @@ namespace prediction_layer
   void PredictionLayer::obstacleCallback(const ObstaclesConstPtr& msg,
                                           const boost::shared_ptr<ObstaclesBuffer>& buffer)
   {
-    ROS_WARN("[obstacleCallback] get in obstacleCallback");
-    // const vector<CircleObstacle>& circles = *msg.circles;
     buffer->lock();
-    ROS_WARN("[obstacleCallback] lock buff");
     buffer->bufferObstacles(*msg);
-    ROS_WARN("[obstacleCallback] buff obstacles");
     buffer->unlock();
     initialize_ = true;
-    ROS_WARN("[obstacleCallback] success to buffer obstacle data to obstacles_buffer");
   }
 
   void PredictionLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
                                     double *min_x, double *min_y, double *max_x, double *max_y)
   {
-    ROS_WARN("[updateBounds] called updateBounds");
+    ros::Time start_t = ros::Time::now();
     // not initialized
     if (!initialize_)
-    {
-      ROS_WARN("[updateBounds] not initialized yet");
       return;
-    }
     // disable prediction layer
     if (!enabled_)
       return;
     
-    ROS_WARN("[updateBounds] initialize_, enabled, now updateOrigin, useExtraBounds");
     if (rolling_window_)
       updateOrigin(robot_x - getSizeInMetersX() / 2,
                    robot_y - getSizeInMetersY() /2);
     useExtraBounds(min_x, min_y, max_x, max_y);
-    ROS_WARN("[updateBounds] succeded to updateOrigin, useExtraBounds");
     bool current = true;
     vector<DynamicObstacle> observations, clearing_observations;
-
-    ROS_WARN("[updateBounds] now we'll get observations, clearing_observations");
     // get the marking observations
     current = current && getMarkingObservations(observations);
-    
+    observations_ = observations;
     // get the clearing observations
     current = current && getClearingObservations(clearing_observations);
-    
+    clearing_observations_ = clearing_observations;
     // update the global current status
     current_ = current;
 
-    ROS_WARN("[updateBounds] now we'll raytraceFreespace");
     // raytrace freespace
     for (unsigned int i = 0; i < clearing_observations.size(); i++)
     {
       raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
     }
 
-    ROS_WARN("[updateBounds] now we'll fillout new obstacles to costmap");
     // place the new obstacles into a priority queue... each with a priority of zero to begin with
     for (vector<DynamicObstacle>::const_iterator it = observations.begin(); it != observations.end(); ++it)
     {
       const DynamicObstacle& obs = *it;
 
       const vector<CircleObstacle>& obj= obs.obs_;
-
+      double max_radius = -0.0;
       for (unsigned int i = 0; i < obj.size(); i++)
       {
         double px = obj[i].center.x;
         double py = obj[i].center.y;
+        max_radius = max(max_radius, obj[i].radius);
         unsigned int mx, my;
         if (!worldToMap(px, py, mx, my))
         {
-          ROS_DEBUG("[PredictionLayer] Computing map cordinate failed");
+          ROS_WARN("[PredictionLayer] fail to world to map in updateBounds");
           continue;
         }
         unsigned int index = getIndex(mx, my);
         costmap_[index] = LETHAL_OBSTACLE;
         touch(px, py, min_x, min_y, max_x, max_y);
       }
+      radiusBounds(max_radius, min_x, min_y, max_x, max_y);
     }
-    ROS_WARN("[updateBounds] after fillout new obstacles to costmap");
     updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
-    ROS_WARN("[updateBounds] update footprint");
+    ros::Time end_t = ros::Time::now();
+    double c_time = (end_t - start_t).toSec();
+    ROS_DEBUG("[PredictionLayer] update bounds cycle time : %.9f", c_time);
+    // cout << "updateBounds min_x : " << *min_x << ",min_y : " << *min_y << ",max_x : " << *max_x << ",max_y : " << *max_y << endl;
   }
 
   void PredictionLayer::updateFootprint(double robot_x, double robot_y, double robot_yaw,
                                         double* min_x, double* min_y, double* max_x, double* max_y)
   {
-    ROS_WARN("[updateFootprint] get in update footprint");
     if (!footprint_clearing_enabled_) return;
     transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(), transformed_footprint_);
 
@@ -271,36 +259,70 @@ namespace prediction_layer
     {
       touch(transformed_footprint_[i].x, transformed_footprint_[i].y, min_x, min_y, max_x, max_y);
     }
-    ROS_WARN("[updateFootprint] finish update footprint");
   }
 
-  void PredictionLayer::updateCosts(costmap_2d::Costmap2D &master_grid, 
+  void PredictionLayer::updateCosts(Costmap2D &master_grid, 
                                     int min_i, int min_j, int max_i, int max_j)
   {
+    ros::Time start_t = ros::Time::now();
     if (!initialize_)
       return;
     if (!enabled_)
       return;
 
-    ROS_WARN("[updateCosts] get in update costs");
     if (footprint_clearing_enabled_)
     {
-      setConvexPolygonCost(transformed_footprint_, costmap_2d::FREE_SPACE);
+      setConvexPolygonCost(transformed_footprint_, FREE_SPACE);
+    }
+    unsigned int size_x = master_grid.getSizeInCellsX();
+    unsigned int size_y = master_grid.getSizeInCellsX();
+    double origin_x = master_grid.getOriginX();
+    double origin_y = master_grid.getOriginY();
+    double resolution = master_grid.getResolution();
+
+    // Fill out circle obstacles
+    for (auto obstacle : observations_.back().obs_)
+    {
+      unsigned int mx, my;
+      mx = (int)((obstacle.center.x - origin_x) / resolution);
+      my = (int)((obstacle.center.y - origin_y) / resolution);
+      if (obstacle.center.x < origin_x || obstacle.center.x < origin_y || mx > size_x || my > size_y)
+      {
+        ROS_WARN("[PredcitionLayer] center pose x : %.5f, y : %.5f, mx : %d, my : %d",obstacle.center.x, obstacle.center.y, mx, my);
+        continue;
+      }
+
+      // Fill out obstacle circle
+      double radius = obstacle.radius / resolution;
+      double sq_radius = radius * radius;
+      for (unsigned int i = 0; i < size_x; i++)
+      {
+        for (unsigned int j = 0; j < size_y; j++)
+        {
+          double dx = (double)mx - (double)i;
+          double dy = (double)my - (double)j;
+          double sq_distance = dx*dx + dy*dy;
+          if (sq_distance <= sq_radius)
+            master_grid.setCost(i,j, LETHAL_OBSTACLE);
+        }
+      }
     }
 
+    // Apply combination method
     switch (combination_method_)
     {
       case 0:  // Overwrite
-        ROS_WARN("[updateCosts] case 0 update WithOverwrite");
         updateWithOverwrite(master_grid, min_i, min_j, max_i, max_j);
         break;
       case 1:  // Maximum
-        ROS_WARN("[updateCosts] case 1 update WithMax");
         updateWithMax(master_grid, min_i, min_j, max_i, max_j);
         break;
       default:  // Nothing
         break;
     }
+    ros::Time end_t = ros::Time::now();
+    double c_time = (end_t - start_t).toSec();
+    ROS_DEBUG("[PredictionLayer] updateCosts cycle time : %.5f",c_time);
   }
 
   void PredictionLayer::addStaticObservation(DynamicObstacle& obs, bool marking, bool clearing)
@@ -330,6 +352,7 @@ namespace prediction_layer
       current = marking_buffers_[i]->isCurrent() && current;
       marking_buffers_[i]->unlock();
     }
+    // ROS_WARN("[PredictionLayer] get MarkingObservations size of marking observation : %d", marking_observations.size());
     marking_observations.insert(marking_observations.end(),
                                 static_marking_observations_.begin(), static_marking_observations_.end());
     return current;
