@@ -129,6 +129,15 @@ namespace prediction_layer
                                 double* min_x, double* min_y, double* max_x, double* max_y);
       void updateFootprint(double robot_x, double robot_y, double robot_yaw,
                            double* min_x, double* min_y, double* max_x, double* max_y);
+      
+      inline void radiusBounds(double radius, double* min_x, double* min_y,
+                               double* max_x, double* max_y)
+      {
+        *min_x -= radius;
+        *min_y -= radius;
+        *max_x += radius;
+        *max_y += radius;
+      }
 
       vector<geometry_msgs::Point> transformed_footprint_;
       bool footprint_clearing_enabled_;
@@ -142,6 +151,9 @@ namespace prediction_layer
 
       // Used only for testing purposes
       vector<DynamicObstacle> static_clearing_observations_, static_marking_observations_;
+
+      // for use current observations
+      vector<DynamicObstacle> observations_, clearing_observations_;
 
       bool rolling_window_;
       dynamic_reconfigure::Server<PredictionLayerConfig> *dsrv_;
