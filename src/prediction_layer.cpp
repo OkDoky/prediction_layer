@@ -180,6 +180,8 @@ namespace prediction_layer
   void PredictionLayer::obstacleCallback(const ObstaclesConstPtr& msg,
                                           const boost::shared_ptr<ObstaclesBuffer>& buffer)
   {
+    ROS_WARN("[PredictionLayer] obstacleCallback seq : %d", *(msg).header.seq);
+    // cout << "[PredictionLayer] obstacleCallback seq : " << *msg.header.seq << endl;
     buffer->lock();
     buffer->bufferObstacles(*msg);
     buffer->unlock();
@@ -323,6 +325,7 @@ namespace prediction_layer
     ros::Time end_t = ros::Time::now();
     double c_time = (end_t - start_t).toSec();
     ROS_DEBUG("[PredictionLayer] updateCosts cycle time : %.5f",c_time);
+    ROS_WARN("[PredictionLayer] updateCosts seq : %d", observations_.back().seq_);
   }
 
   void PredictionLayer::addStaticObservation(DynamicObstacle& obs, bool marking, bool clearing)

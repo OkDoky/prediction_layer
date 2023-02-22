@@ -76,6 +76,7 @@ namespace prediction_layer
     DynamicObstacle(const DynamicObstacle& obs) :
         origin_(obs.origin_), 
         obs_(obs.obs_),
+        seq_(obs.seq_),
         updated_time_(ros::Time::now())
     {
     }
@@ -87,7 +88,7 @@ namespace prediction_layer
      */
     DynamicObstacle(std::vector<CircleObstacle> obs) :
         origin_(),
-        obs_(obs), 
+        obs_(obs),
         updated_time_(ros::Time::now())
     {
     }
@@ -95,6 +96,7 @@ namespace prediction_layer
     geometry_msgs::Point origin_;
     std::vector<CircleObstacle> obs_;
     ros::Time updated_time_;
+    uint32_t seq_;
   };  // class DynamicObstacles
 
 }  // namespace prediction_layer

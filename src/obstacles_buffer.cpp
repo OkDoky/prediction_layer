@@ -109,6 +109,7 @@ namespace prediction_layer
     Obstacles transformed_obs = obs;
     observation_list_.push_front(DynamicObstacle());
     observation_list_.front().obs_ = transformed_obs.circles;
+    observation_list_.front().seq_ = obs.header.seq;
 
     // get lookuptransform form tf_buffer
     try
