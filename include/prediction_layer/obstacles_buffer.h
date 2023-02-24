@@ -77,15 +77,15 @@ namespace prediction_layer
        */
       ~ObstaclesBuffer();
       
-      /**
-       * @brief Set the Global Frame of an obstacles.
-       * this will transform all the current cached obstacles to 
-       * the new global frame.
-       * @param new_global_frame the name of new global frame. 
-       * @return true if operation succeded
-       * @return false otherwise
-       */
-      bool setGlobalFrame(const string new_global_frame);
+      // /**
+      //  * @brief Set the Global Frame of an obstacles.
+      //  * this will transform all the current cached obstacles to 
+      //  * the new global frame.
+      //  * @param new_global_frame the name of new global frame. 
+      //  * @return true if operation succeded
+      //  * @return false otherwise
+      //  */
+      // bool setGlobalFrame(const string new_global_frame);
 
       /**
        * @brief Transforms a Obstacles to the global frame and buffers it

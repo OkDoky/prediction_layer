@@ -112,10 +112,6 @@ namespace prediction_layer
       void obstacleCallback(const ObstaclesConstPtr& msg,
                             const boost::shared_ptr<ObstaclesBuffer>& buffer);
 
-      // for testing purposes
-      void addStaticObservation(DynamicObstacle& obs, bool marking, bool clearing);
-      void clearStaticObservations(bool marking, bool clearing);
-
     protected:
       bool resetLayerCallback(std_srvs::Trigger::Request& req, 
                               std_srvs::Trigger::Response& res);
@@ -165,6 +161,7 @@ namespace prediction_layer
       ros::ServiceServer reset_layer_;
       bool initialize_, enabled_;
       double obstacle_range_, raytrace_range_;
+      ros::Time last_call_updateCosts_, last_call_updateBounds_;
   };
 }
 #endif

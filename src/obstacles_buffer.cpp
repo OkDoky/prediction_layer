@@ -54,50 +54,50 @@ namespace prediction_layer
   {
   }
   
-  bool ObstaclesBuffer::setGlobalFrame(const string new_global_frame)
-  {
-    ros::Time transform_time = ros::Time::now();
-    string tf_error;
+  // bool ObstaclesBuffer::setGlobalFrame(const string new_global_frame)
+  // {
+  //   ros::Time transform_time = ros::Time::now();
+  //   string tf_error;
 
-    // try check connection connection frames
-    if (!tf2_buffer_.canTransform(new_global_frame, global_frame_, transform_time, 
-            ros::Duration(tf_tolerance_), &tf_error))
-    {
-      ROS_ERROR("[ObstaclesBuffer] Transform beteen %s and %s with tolerance %.2f failed: %s.", new_global_frame.c_str(), 
-                  global_frame_.c_str(), tf_tolerance_, tf_error.c_str());
-      return false;
-    }
+  //   // try check connection connection frames
+  //   if (!tf2_buffer_.canTransform(new_global_frame, global_frame_, transform_time, 
+  //           ros::Duration(tf_tolerance_), &tf_error))
+  //   {
+  //     ROS_ERROR("[ObstaclesBuffer] Transform beteen %s and %s with tolerance %.2f failed: %s.", new_global_frame.c_str(), 
+  //                 global_frame_.c_str(), tf_tolerance_, tf_error.c_str());
+  //     return false;
+  //   }
 
-    list<DynamicObstacle>::iterator obs_it;
-    for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); ++obs_it)
-    {
-      try
-      {
-        DynamicObstacle& dyn_obj= *obs_it;
+  //   list<DynamicObstacle>::iterator obs_it;
+  //   for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); ++obs_it)
+  //   {
+  //     try
+  //     {
+  //       DynamicObstacle& dyn_obj= *obs_it;
 
-        geometry_msgs::PointStamped origin;
-        origin.header.frame_id = global_frame_;
-        origin.header.stamp = transform_time;
-        origin.point = dyn_obj.origin_;
+  //       geometry_msgs::PointStamped origin;
+  //       origin.header.frame_id = global_frame_;
+  //       origin.header.stamp = transform_time;
+  //       origin.point = dyn_obj.origin_;
 
-        // we need to transform the origin of the dynamic obstacles to the new global frame
-        tf2_buffer_.transform(origin, origin, new_global_frame);
-        dyn_obj.origin_ = origin.point;
+  //       // we need to transform the origin of the dynamic obstacles to the new global frame
+  //       tf2_buffer_.transform(origin, origin, new_global_frame);
+  //       dyn_obj.origin_ = origin.point;
 
-        // we also need to transform the list<obstacle_dectector::CircleObstacle> to the new global frame
-        tf2_buffer_.transform(dyn_obj.obs_, dyn_obj.obs_, new_global_frame);
-      }
-      catch (TransformException& ex)
-      {
-        ROS_ERROR("[ObstacleBuffer] TF Error attempting to transform an dynamic obstacles from %s to %s: %s", global_frame_.c_str(),
-                  new_global_frame.c_str(), ex.what());
-        return false;
-      }
-    }
-    // now we need to update our global frame member
-    global_frame_ = new_global_frame;
-    return true;
-  }
+  //       // we also need to transform the list<obstacle_dectector::CircleObstacle> to the new global frame
+  //       tf2_buffer_.transform(dyn_obj.obs_, dyn_obj.obs_, new_global_frame);
+  //     }
+  //     catch (TransformException& ex)
+  //     {
+  //       ROS_ERROR("[ObstacleBuffer] TF Error attempting to transform an dynamic obstacles from %s to %s: %s", global_frame_.c_str(),
+  //                 new_global_frame.c_str(), ex.what());
+  //       return false;
+  //     }
+  //   }
+  //   // now we need to update our global frame member
+  //   global_frame_ = new_global_frame;
+  //   return true;
+  // }
 
   void ObstaclesBuffer::bufferObstacles(const Obstacles& obs)
   {

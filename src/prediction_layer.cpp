@@ -158,6 +158,10 @@ namespace prediction_layer
     dsrv_ = NULL;
     setupDynamicReconfigure(nh);
 
+    // debug
+    last_call_updateCosts_ = ros::Time::now();
+    last_call_updateBounds_ = ros::Time::now();
+
     // added
     reset_layer_ = nh.advertiseService("reset_layer", &PredictionLayer::resetLayerCallback, this);
     ROS_WARN("[PredictionLayer] succeded to init prediction layer");
@@ -180,8 +184,6 @@ namespace prediction_layer
   void PredictionLayer::obstacleCallback(const ObstaclesConstPtr& msg,
                                           const boost::shared_ptr<ObstaclesBuffer>& buffer)
   {
-    ROS_WARN("[PredictionLayer] obstacleCallback seq : %d", *(msg).header.seq);
-    // cout << "[PredictionLayer] obstacleCallback seq : " << *msg.header.seq << endl;
     buffer->lock();
     buffer->bufferObstacles(*msg);
     buffer->unlock();
@@ -191,6 +193,9 @@ namespace prediction_layer
   void PredictionLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
                                     double *min_x, double *min_y, double *max_x, double *max_y)
   {
+    double luc = (ros::Time::now() - last_call_updateBounds_).toSec();
+    ROS_WARN("[updateBounds] : %.8f",luc);
+    last_call_updateBounds_ = ros::Time::now();
     ros::Time start_t = ros::Time::now();
     // not initialized
     if (!initialize_)
@@ -248,7 +253,6 @@ namespace prediction_layer
     ros::Time end_t = ros::Time::now();
     double c_time = (end_t - start_t).toSec();
     ROS_DEBUG("[PredictionLayer] update bounds cycle time : %.9f", c_time);
-    // cout << "updateBounds min_x : " << *min_x << ",min_y : " << *min_y << ",max_x : " << *max_x << ",max_y : " << *max_y << endl;
   }
 
   void PredictionLayer::updateFootprint(double robot_x, double robot_y, double robot_yaw,
@@ -266,6 +270,12 @@ namespace prediction_layer
   void PredictionLayer::updateCosts(Costmap2D &master_grid, 
                                     int min_i, int min_j, int max_i, int max_j)
   {
+    // debug
+    /* double luc = (ros::Time::now() - last_call_updateCosts_).toSec();
+    ROS_WARN("[updateCosts] : %.8f", luc);
+    last_call_updateCosts_ = ros::Time::now();
+     */
+    
     ros::Time start_t = ros::Time::now();
     if (!initialize_)
       return;
@@ -325,23 +335,7 @@ namespace prediction_layer
     ros::Time end_t = ros::Time::now();
     double c_time = (end_t - start_t).toSec();
     ROS_DEBUG("[PredictionLayer] updateCosts cycle time : %.5f",c_time);
-    ROS_WARN("[PredictionLayer] updateCosts seq : %d", observations_.back().seq_);
-  }
-
-  void PredictionLayer::addStaticObservation(DynamicObstacle& obs, bool marking, bool clearing)
-  {
-    if (marking)
-      static_marking_observations_.push_back(obs);
-    if (clearing)
-      static_clearing_observations_.push_back(obs);
-  }
-
-  void PredictionLayer::clearStaticObservations(bool marking, bool clearing)
-  {
-    if (marking)
-      static_marking_observations_.clear();
-    if (clearing)
-      static_clearing_observations_.clear();
+    // ROS_WARN("[PredictionLayer] updateCosts seq : %d", observations_.back().seq_);
   }
 
   bool PredictionLayer::getMarkingObservations(vector<DynamicObstacle>& marking_observations) const
