@@ -48,6 +48,7 @@ namespace prediction_layer
      */
     DynamicObstacle() :
       obs_(), 
+      transformed_(false),
       updated_time_(ros::Time::now())
     {
     }
@@ -56,47 +57,12 @@ namespace prediction_layer
     {
     }
 
-    // /**
-    //  * @brief  Creates an observation from an origin point and a obs
-    //  * @param origin The origin point of the observation
-    //  * @param obs The point obs of the observation
-    //  */
-    // DynamicObstacle(geometry_msgs::Point& origin,
-    //                 std::vector<CircleObstacle> obs) :
-    //     origin_(origin),
-    //     obs_(obs),
-    //     updated_time_(ros::Time::now())
-    // {
-    // }
-
-    // /**
-    //  * @brief  Copy constructor
-    //  * @param obs The observation to copy
-    //  */
-    // DynamicObstacle(const DynamicObstacle& obs) :
-    //     origin_(obs.origin_), 
-    //     obs_(obs.obs_),
-    //     seq_(obs.seq_),
-    //     updated_time_(ros::Time::now())
-    // {
-    // }
-
-    // /**
-    //  * @brief  Creates an observation from a point obs
-    //  * @param obs The point obs of the observation
-    //  * @param obstacle_range The range out to which an observation should be able to insert obstacles
-    //  */
-    // DynamicObstacle(std::vector<CircleObstacle> obs) :
-    //     origin_(),
-    //     obs_(obs),
-    //     updated_time_(ros::Time::now())
-    // {
-    // }
-
     geometry_msgs::Point origin_;
     std::vector<CircleObstacle> obs_;
     ros::Time updated_time_;
     uint32_t seq_;
+    bool transformed_;
+    double pub_to_buf_;
   };  // class DynamicObstacles
 
 }  // namespace prediction_layer

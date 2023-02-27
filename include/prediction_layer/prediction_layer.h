@@ -162,6 +162,7 @@ namespace prediction_layer
       bool initialize_, enabled_;
       double obstacle_range_, raytrace_range_;
       ros::Time last_call_updateCosts_, last_call_updateBounds_;
+      bool debug_mode_;
   };
 }
 #endif

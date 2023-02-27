@@ -54,54 +54,10 @@ namespace prediction_layer
   {
   }
   
-  // bool ObstaclesBuffer::setGlobalFrame(const string new_global_frame)
-  // {
-  //   ros::Time transform_time = ros::Time::now();
-  //   string tf_error;
-
-  //   // try check connection connection frames
-  //   if (!tf2_buffer_.canTransform(new_global_frame, global_frame_, transform_time, 
-  //           ros::Duration(tf_tolerance_), &tf_error))
-  //   {
-  //     ROS_ERROR("[ObstaclesBuffer] Transform beteen %s and %s with tolerance %.2f failed: %s.", new_global_frame.c_str(), 
-  //                 global_frame_.c_str(), tf_tolerance_, tf_error.c_str());
-  //     return false;
-  //   }
-
-  //   list<DynamicObstacle>::iterator obs_it;
-  //   for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); ++obs_it)
-  //   {
-  //     try
-  //     {
-  //       DynamicObstacle& dyn_obj= *obs_it;
-
-  //       geometry_msgs::PointStamped origin;
-  //       origin.header.frame_id = global_frame_;
-  //       origin.header.stamp = transform_time;
-  //       origin.point = dyn_obj.origin_;
-
-  //       // we need to transform the origin of the dynamic obstacles to the new global frame
-  //       tf2_buffer_.transform(origin, origin, new_global_frame);
-  //       dyn_obj.origin_ = origin.point;
-
-  //       // we also need to transform the list<obstacle_dectector::CircleObstacle> to the new global frame
-  //       tf2_buffer_.transform(dyn_obj.obs_, dyn_obj.obs_, new_global_frame);
-  //     }
-  //     catch (TransformException& ex)
-  //     {
-  //       ROS_ERROR("[ObstacleBuffer] TF Error attempting to transform an dynamic obstacles from %s to %s: %s", global_frame_.c_str(),
-  //                 new_global_frame.c_str(), ex.what());
-  //       return false;
-  //     }
-  //   }
-  //   // now we need to update our global frame member
-  //   global_frame_ = new_global_frame;
-  //   return true;
-  // }
-
   void ObstaclesBuffer::bufferObstacles(const Obstacles& obs)
   {
     ros::Time start_t = ros::Time::now();
+    ROS_DEBUG_NAMED("cycleTime","[bufferObstacles] time diff during buffer and publsh : %.6f", (start_t - obs.header.stamp).toSec());
     // init update target
     geometry_msgs::TransformStamped transform;
     string origin_frame = source_frame_ == "" ? obs.header.frame_id : source_frame_;
@@ -110,6 +66,7 @@ namespace prediction_layer
     observation_list_.push_front(DynamicObstacle());
     observation_list_.front().obs_ = transformed_obs.circles;
     observation_list_.front().seq_ = obs.header.seq;
+    observation_list_.front().pub_to_buf_ = (ros::Time::now() - obs.header.stamp).toSec();
 
     // get lookuptransform form tf_buffer
     try
@@ -144,6 +101,13 @@ namespace prediction_layer
       observation_list_.pop_front();
       return;
     }
+    while (true)
+    {
+      if (observation_list_.size() <= 2)
+        break;
+      observation_list_.pop_back();
+    }
+    observation_list_.front().transformed_ = true;
     last_updated_ = ros::Time::now();
     purgeStaleObstacles();
     ros::Time end_t = ros::Time::now();
@@ -155,11 +119,17 @@ namespace prediction_layer
   {
     // first... let's make sure that we don't have any stale Obstacles
     purgeStaleObstacles();
+    list<DynamicObstacle> obs_list = observation_list_;
 
     // now we'll just copy the Obstacles for the caller
     list<DynamicObstacle>::iterator obs_it;
     for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); obs_it++)
     {
+      if (obs_it->transformed_ == false)
+      {
+        ROS_DEBUG_NAMED("transform_check","[observationBuffer] not transfromed data is alive");
+        continue;
+      }
       dynamic_obstacles.push_back(*obs_it);
     }
   }

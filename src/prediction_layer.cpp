@@ -87,13 +87,15 @@ namespace prediction_layer
     nh.getParam("clearing", clearing);
     nh.getParam("marking", marking);
     nh.getParam("combination_method", combination_method_);
+    nh.getParam("debug_mode", debug_mode_);
     ROS_WARN("[PredictionLayer] object_source : %s",topic.c_str());
     ROS_WARN("[PredictionLayer] source_frame : %s",source_frame.c_str());
     ROS_WARN("[PredictionLayer] observation_persistence : %.2f",observation_keep_time);
     ROS_WARN("[PredictionLayer] expected_update_rate : %.2f",expected_update_rate);
     ROS_WARN("[PredictionLayer] inf_is_valid : %d",inf_is_valid);
-    ROS_WARN("[PredictionLayer] clearing : %d",clearing);
-    ROS_WARN("[PredictionLayer] marking : %d",marking);
+    ROS_WARN("[PredictionLayer] clearing : %s",to_string(clearing).c_str());
+    ROS_WARN("[PredictionLayer] marking : %s",to_string(marking).c_str());
+    ROS_WARN("[PredictionLayer] debug mode : %s", to_string(debug_mode_).c_str());
 
     string raytrace_range_param_name, obstacle_range_param_name;
 
@@ -184,19 +186,20 @@ namespace prediction_layer
   void PredictionLayer::obstacleCallback(const ObstaclesConstPtr& msg,
                                           const boost::shared_ptr<ObstaclesBuffer>& buffer)
   {
-    buffer->lock();
+    ros::Time s_t = ros::Time::now();
+    // buffer->lock();
     buffer->bufferObstacles(*msg);
-    buffer->unlock();
+    // buffer->unlock();
     initialize_ = true;
+    ros::Time e_t = ros::Time::now();
+    double c_t = (e_t - s_t).toSec();
+    ROS_DEBUG_COND(debug_mode_,"[obstacleCallback] %.6f", c_t);
   }
 
   void PredictionLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
                                     double *min_x, double *min_y, double *max_x, double *max_y)
   {
-    double luc = (ros::Time::now() - last_call_updateBounds_).toSec();
-    ROS_WARN("[updateBounds] : %.8f",luc);
-    last_call_updateBounds_ = ros::Time::now();
-    ros::Time start_t = ros::Time::now();
+    ros::Time s_t = ros::Time::now();
     // not initialized
     if (!initialize_)
       return;
@@ -250,9 +253,9 @@ namespace prediction_layer
       radiusBounds(max_radius, min_x, min_y, max_x, max_y);
     }
     updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
-    ros::Time end_t = ros::Time::now();
-    double c_time = (end_t - start_t).toSec();
-    ROS_DEBUG("[PredictionLayer] update bounds cycle time : %.9f", c_time);
+    ros::Time e_t = ros::Time::now();
+    double c_t = (e_t - s_t).toSec();
+    ROS_DEBUG_COND(debug_mode_,"[updateBounds] %.6f", c_t);
   }
 
   void PredictionLayer::updateFootprint(double robot_x, double robot_y, double robot_yaw,
@@ -270,13 +273,7 @@ namespace prediction_layer
   void PredictionLayer::updateCosts(Costmap2D &master_grid, 
                                     int min_i, int min_j, int max_i, int max_j)
   {
-    // debug
-    /* double luc = (ros::Time::now() - last_call_updateCosts_).toSec();
-    ROS_WARN("[updateCosts] : %.8f", luc);
-    last_call_updateCosts_ = ros::Time::now();
-     */
-    
-    ros::Time start_t = ros::Time::now();
+    ros::Time s_t = ros::Time::now();
     if (!initialize_)
       return;
     if (!enabled_)
@@ -332,10 +329,11 @@ namespace prediction_layer
       default:  // Nothing
         break;
     }
-    ros::Time end_t = ros::Time::now();
-    double c_time = (end_t - start_t).toSec();
-    ROS_DEBUG("[PredictionLayer] updateCosts cycle time : %.5f",c_time);
-    // ROS_WARN("[PredictionLayer] updateCosts seq : %d", observations_.back().seq_);
+    ROS_DEBUG_COND(debug_mode_, "[updateBounds] buffer to updateCost : %.6f", (ros::Time::now() - observations_.back().updated_time_).toSec());
+    ROS_DEBUG_COND(debug_mode_, "[updateBounds] publish to buffer : %.6f", observations_.back().pub_to_buf_);
+    ros::Time e_t = ros::Time::now();
+    double c_t = (e_t - s_t).toSec();
+    ROS_DEBUG_COND(debug_mode_,"[updateCosts] %.6f", c_t);
   }
 
   bool PredictionLayer::getMarkingObservations(vector<DynamicObstacle>& marking_observations) const
@@ -344,14 +342,15 @@ namespace prediction_layer
     // get the marking observations
     for (unsigned int i = 0; i < marking_buffers_.size(); ++i)
     {
-      marking_buffers_[i]->lock();
+      // marking_buffers_[i]->lock();
       marking_buffers_[i]->getObstacles(marking_observations);
       current = marking_buffers_[i]->isCurrent() && current;
-      marking_buffers_[i]->unlock();
+      // marking_buffers_[i]->unlock();
     }
     // ROS_WARN("[PredictionLayer] get MarkingObservations size of marking observation : %d", marking_observations.size());
     marking_observations.insert(marking_observations.end(),
                                 static_marking_observations_.begin(), static_marking_observations_.end());
+    ROS_DEBUG_NAMED("size","[getMarkingObservations] marking_observations size : %ld", marking_observations.size());
     return current;
   }
 
@@ -361,13 +360,14 @@ namespace prediction_layer
     // get the clearing observations
     for (unsigned int i = 0; i < clearing_buffers_.size(); ++i)
     {
-      clearing_buffers_[i]->lock();
+      // clearing_buffers_[i]->lock();
       clearing_buffers_[i]->getObstacles(clearing_observations);
       current = clearing_buffers_[i]->isCurrent() && current;
-      clearing_buffers_[i]->unlock();
+      // clearing_buffers_[i]->unlock();
     }
     clearing_observations.insert(clearing_observations.end(),
                                  static_clearing_observations_.begin(), static_clearing_observations_.end());
+    ROS_DEBUG_NAMED("size", "[getClearObservations] clearing_observation size : %ld", clearing_observations.size());
     return current;
   }
 
