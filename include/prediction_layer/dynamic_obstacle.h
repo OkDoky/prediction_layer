@@ -34,6 +34,7 @@
 #define PREDICTION_LAYER_DYNAMIC_OBSTACLES_H_
 
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/Polygon.h>
 #include <obstacle_detector/CircleObstacle.h>
 
 using namespace obstacle_detector;
@@ -63,6 +64,9 @@ namespace prediction_layer
     uint32_t seq_;
     bool transformed_;
     double pub_to_buf_;
+
+    // add velocity boundary
+    std::vector<geometry_msgs::Polygon> vel_boundary_; 
   };  // class DynamicObstacles
 
 }  // namespace prediction_layer
