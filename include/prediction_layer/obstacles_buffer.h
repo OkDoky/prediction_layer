@@ -31,14 +31,15 @@
 #include <vector>
 #include <list>
 #include <string>
+#include <math.h>
 #include <ros/time.h>
 #include <prediction_layer/dynamic_obstacle.h>
-#include <obstacle_detector/CircleObstacle.h>
 #include <obstacle_detector/Obstacles.h>
-#include <geometry_msgs/PointStamped.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/buffer.h>
 #include <tf2/transform_datatypes.h>
+#include <geometry_msgs/Polygon.h>
+#include <geometry_msgs/Point32.h>
 
 // Thread support
 #include <boost/thread.hpp>
@@ -69,23 +70,22 @@ namespace prediction_layer
        * @param tf_tolerance The amount of time to wait for a transform to be available when setting a new global frame
        */
       ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
-                      double obstacle_range, double raytrace_range, tf2_ros::Buffer& tf2_buffer, 
-                      string global_frame, string source_frame, double tf_tolerance);
+                      tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance);
       
       /**
        * @brief Destroy the Obstacles Buffer object
        */
       ~ObstaclesBuffer();
       
-      /**
-       * @brief Set the Global Frame of an obstacles.
-       * this will transform all the current cached obstacles to 
-       * the new global frame.
-       * @param new_global_frame the name of new global frame. 
-       * @return true if operation succeded
-       * @return false otherwise
-       */
-      bool setGlobalFrame(const string new_global_frame);
+      // /**
+      //  * @brief Set the Global Frame of an obstacles.
+      //  * this will transform all the current cached obstacles to 
+      //  * the new global frame.
+      //  * @param new_global_frame the name of new global frame. 
+      //  * @return true if operation succeded
+      //  * @return false otherwise
+      //  */
+      // bool setGlobalFrame(const string new_global_frame);
 
       /**
        * @brief Transforms a Obstacles to the global frame and buffers it
@@ -126,11 +126,21 @@ namespace prediction_layer
        * @brief Reset last updated timestamp
        */
       void resetLastUpdated();
+
     private:
       /**
        * @brief Removes any stale obervations form the buffer list
        */
       void purgeStaleObstacles();
+
+      /**
+       * @brief Set the Velocity To Polygon object
+       * 
+       * @param obs_vec transformed obs data frame is global frame
+       * @param polygons to fill out from velocity to make polygon
+       */
+      void setVelocityToPolygon(const vector<CircleObstacle>& obs_vec,
+                                vector<geometry_msgs::Polygon>& polygons);
 
       tf2_ros::Buffer& tf2_buffer_;
       const ros::Duration observation_keep_time_;
@@ -139,11 +149,9 @@ namespace prediction_layer
       ros::Time last_updated_;
       string global_frame_;
       string source_frame_;
-      list<CircleObstacle> circle_list_;
       list<DynamicObstacle> observation_list_;
       string topic_name_;
       boost::recursive_mutex lock_;
-      double obstacle_range_, raytrace_range_;
       double tf_tolerance_;
   };
 }
