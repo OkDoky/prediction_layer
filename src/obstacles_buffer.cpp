@@ -32,11 +32,12 @@ using namespace std;
 using namespace tf2;
 using namespace obstacle_detector;
 
+const double PI = acos(-1);
+
 namespace prediction_layer
 {
   ObstaclesBuffer::ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
-                  double obstacle_range, double raytrace_range, tf2_ros::Buffer& tf2_buffer, 
-                  string global_frame, string source_frame, double tf_tolerance) :
+                                   tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance) :
     tf2_buffer_(tf2_buffer), 
     observation_keep_time_(observation_keep_time),
     expected_update_rate_(expected_update_rate),
@@ -44,8 +45,6 @@ namespace prediction_layer
     source_frame_(source_frame),
     global_frame_(global_frame),
     tf_tolerance_(tf_tolerance),
-    obstacle_range_(obstacle_range),
-    raytrace_range_(raytrace_range),
     last_updated_(ros::Time::now())
   {
   }
@@ -62,11 +61,18 @@ namespace prediction_layer
     geometry_msgs::TransformStamped transform;
     string origin_frame = source_frame_ == "" ? obs.header.frame_id : source_frame_;
     geometry_msgs::Point local_origin, global_origin;
+    
+    // add vel polygon
+    vector<geometry_msgs::Polygon> vel_polygon;
+    
     Obstacles transformed_obs = obs;
     observation_list_.push_front(DynamicObstacle());
     observation_list_.front().obs_ = transformed_obs.circles;
     observation_list_.front().seq_ = obs.header.seq;
     observation_list_.front().pub_to_buf_ = (ros::Time::now() - obs.header.stamp).toSec();
+    
+    // add vel polygon
+    observation_list_.front().vel_boundary_ = vel_polygon;
 
     // get lookuptransform form tf_buffer
     try
@@ -101,6 +107,10 @@ namespace prediction_layer
       observation_list_.pop_front();
       return;
     }
+
+    // add vel polygon
+    setVelocityToPolygon(transformed_obs.circles, vel_polygon);
+    observation_list_.front().vel_boundary_ = vel_polygon;
     while (true)
     {
       if (observation_list_.size() <= 2)
@@ -156,36 +166,87 @@ namespace prediction_layer
   }
 
   void ObstaclesBuffer::purgeStaleObstacles()
+  {
+    // ROS_WARN("[PredictionLayer] before purgeStacleObstacles remain obstacles : %d", observation_list_.size());
+    if (!observation_list_.empty())
     {
-      // ROS_WARN("[PredictionLayer] before purgeStacleObstacles remain obstacles : %d", observation_list_.size());
-      if (!observation_list_.empty())
-      {
-        list<DynamicObstacle>::iterator obs_it = observation_list_.begin();
+      list<DynamicObstacle>::iterator obs_it = observation_list_.begin();
 
-        // if we're keeping dynamic obstacles for no time... 
-        // then we'll only keep one set of obstacles
-        if (observation_keep_time_ == ros::Duration(0.0))
+      // if we're keeping dynamic obstacles for no time... 
+      // then we'll only keep one set of obstacles
+      if (observation_keep_time_ == ros::Duration(0.0))
+      {
+        observation_list_.erase(++obs_it, observation_list_.end());
+        return;
+      }
+
+      // otherwise... we'll have to loop through the 
+      // dynamic obstacles to see which ones are stale
+      for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); ++obs_it)
+      {
+        DynamicObstacle& obs = *obs_it;
+        // check if the obstacle is out of date... and if it is, 
+        // remove it and those that follow from the list
+        ros::Duration time_diff = last_updated_ - obs.updated_time_;
+        if (time_diff > observation_keep_time_)
         {
-          observation_list_.erase(++obs_it, observation_list_.end());
+          observation_list_.erase(obs_it, observation_list_.end());
           return;
         }
-
-        // otherwise... we'll have to loop through the 
-        // dynamic obstacles to see which ones are stale
-        for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); ++obs_it)
-        {
-          DynamicObstacle& obs = *obs_it;
-          // check if the obstacle is out of date... and if it is, 
-          // remove it and those that follow from the list
-          ros::Duration time_diff = last_updated_ - obs.updated_time_;
-          if (time_diff > observation_keep_time_)
-          {
-            observation_list_.erase(obs_it, observation_list_.end());
-            return;
-          }
-        }
       }
-      // ROS_WARN("[PredictionLayer] purgeStaleObstacles and remain obstacles : %d", observation_list_.size());
     }
+    // ROS_WARN("[PredictionLayer] purgeStaleObstacles and remain obstacles : %d", observation_list_.size());
+  }
+
+  void ObstaclesBuffer::setVelocityToPolygon(const vector<CircleObstacle>& obs_vec,
+                                            vector<geometry_msgs::Polygon>& polygons)
+  {
+    for (auto& obs : obs_vec)
+    {
+      bool is_closing = true;
+      double pos_x, pos_y;
+      double vel_x, vel_y;
+      geometry_msgs::Polygon vel_polygon;
+      // vel_polygon.header.stamp = ros::Time::now();
+      // vel_polygon.header.frame_id = global_frame_;
+
+      pos_x = obs.center.x;
+      pos_y = obs.center.y;
+      vel_x = obs.velocity.x;
+      vel_y = obs.velocity.y;
+
+      double vel_radius, vel_scalar;
+      double vel_theta;
+      vel_radius = obs.radius;
+      vel_scalar = sqrt(vel_x*vel_x + vel_y*vel_y);
+      if (vel_scalar < vel_radius)
+      {
+        vel_x = vel_x / vel_scalar * vel_radius;
+        vel_y = vel_y / vel_scalar * vel_radius;
+      }
+
+      vel_theta = atan2(vel_x, vel_y);
+      // vel_theta = PI - vel_theta;
+
+      geometry_msgs::Point32 p1, p2, p3, p4;
+      p1.x = pos_x - vel_radius*cos(vel_theta);
+      p1.y = pos_y + vel_radius*sin(vel_theta);
+
+      p2.x = pos_x + vel_radius*cos(vel_theta);
+      p2.y = pos_y - vel_radius*sin(vel_theta);
+
+      p3.x = pos_x + vel_x + vel_radius*cos(vel_theta);
+      p3.y = pos_y + vel_y - vel_radius*sin(vel_theta);
+
+      p4.x = pos_x + vel_x - vel_radius*cos(vel_theta);
+      p4.y = pos_y + vel_y + vel_radius*sin(vel_theta);
+      
+      vel_polygon.points.push_back(p1);
+      vel_polygon.points.push_back(p2);
+      vel_polygon.points.push_back(p3);
+      vel_polygon.points.push_back(p4);
+      polygons.push_back(vel_polygon);
+    }
+  }
   
 } // namespace prediction_layer

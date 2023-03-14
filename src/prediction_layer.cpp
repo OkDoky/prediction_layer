@@ -62,7 +62,7 @@ namespace prediction_layer
       default_value_ = NO_INFORMATION;
     else
       default_value_ = FREE_SPACE;
-
+    default_value_ = FREE_SPACE;
     PredictionLayer::matchSize();
     current_ = true;
     initialize_ = false;
@@ -77,37 +77,19 @@ namespace prediction_layer
 
     double observation_keep_time, expected_update_rate;
     string topic, source_frame;
-    bool inf_is_valid, clearing, marking;
+    debug_mode_ = false;
 
     nh.getParam("object_source", topic);
     nh.getParam("source_frame", source_frame);
     nh.getParam("observation_persistence", observation_keep_time);
     nh.getParam("expected_update_rate", expected_update_rate);
-    nh.getParam("inf_is_valid", inf_is_valid);
-    nh.getParam("clearing", clearing);
-    nh.getParam("marking", marking);
     nh.getParam("combination_method", combination_method_);
     nh.getParam("debug_mode", debug_mode_);
     ROS_WARN("[PredictionLayer] object_source : %s",topic.c_str());
     ROS_WARN("[PredictionLayer] source_frame : %s",source_frame.c_str());
     ROS_WARN("[PredictionLayer] observation_persistence : %.2f",observation_keep_time);
     ROS_WARN("[PredictionLayer] expected_update_rate : %.2f",expected_update_rate);
-    ROS_WARN("[PredictionLayer] inf_is_valid : %d",inf_is_valid);
-    ROS_WARN("[PredictionLayer] clearing : %s",to_string(clearing).c_str());
-    ROS_WARN("[PredictionLayer] marking : %s",to_string(marking).c_str());
     ROS_WARN("[PredictionLayer] debug mode : %s", to_string(debug_mode_).c_str());
-
-    string raytrace_range_param_name, obstacle_range_param_name;
-
-    // get the obstacle range for the sensor
-    obstacle_range_ = 2.5;
-    if (nh.searchParam("obstacle_range", obstacle_range_param_name))
-      nh.getParam(obstacle_range_param_name, obstacle_range_);
-    
-    // get the raytrace range for the sensor
-    raytrace_range_ = 3.0;
-    if (nh.searchParam("raytrace_range", raytrace_range_param_name))
-      nh.getParam(raytrace_range_param_name, raytrace_range_);
     
     ROS_WARN("[ObstacleLayer] Creating an observation buffer for source %s, topic %s, frame %s", 
       topic.c_str(), topic.c_str(), source_frame.c_str());
@@ -117,16 +99,7 @@ namespace prediction_layer
       observation_buffers_.push_back(
         boost::shared_ptr<ObstaclesBuffer
             > (new ObstaclesBuffer(topic, observation_keep_time, expected_update_rate,
-                                obstacle_range_, raytrace_range_, *tf_, global_frame_,
-                                source_frame, transform_tolerance)));
-      
-      // check if we'll add this buffer to our marking observation buffers
-      if (marking)
-        marking_buffers_.push_back(observation_buffers_.back());
-      
-      // check if we'll also add this buffer to our clearing observation buffers
-      if (clearing)
-        clearing_buffers_.push_back(observation_buffers_.back());
+                                   *tf_, global_frame_,source_frame, transform_tolerance)));
     }
     catch (exception ex)
     {
@@ -167,6 +140,9 @@ namespace prediction_layer
     // added
     reset_layer_ = nh.advertiseService("reset_layer", &PredictionLayer::resetLayerCallback, this);
     ROS_WARN("[PredictionLayer] succeded to init prediction layer");
+    pub_transformed_footprint_ = nh.advertise<geometry_msgs::PolygonStamped>("transformed_footprint", 10);
+    pub_boundarys_ = nh.advertise<prediction_layer::PolygonBoundary>("velocity_boundarys", 10);
+    pub_first_polygon_ = nh.advertise<geometry_msgs::PolygonStamped>("first_boundarys", 10);
   }
 
   void PredictionLayer::setupDynamicReconfigure(ros::NodeHandle& nh)
@@ -187,9 +163,9 @@ namespace prediction_layer
                                           const boost::shared_ptr<ObstaclesBuffer>& buffer)
   {
     ros::Time s_t = ros::Time::now();
-    // buffer->lock();
+    buffer->lock();
     buffer->bufferObstacles(*msg);
-    // buffer->unlock();
+    buffer->unlock();
     initialize_ = true;
     ros::Time e_t = ros::Time::now();
     double c_t = (e_t - s_t).toSec();
@@ -212,21 +188,11 @@ namespace prediction_layer
                    robot_y - getSizeInMetersY() /2);
     useExtraBounds(min_x, min_y, max_x, max_y);
     bool current = true;
-    vector<DynamicObstacle> observations, clearing_observations;
-    // get the marking observations
-    current = current && getMarkingObservations(observations);
-    observations_ = observations;
-    // get the clearing observations
-    current = current && getClearingObservations(clearing_observations);
-    clearing_observations_ = clearing_observations;
-    // update the global current status
-    current_ = current;
 
-    // raytrace freespace
-    for (unsigned int i = 0; i < clearing_observations.size(); i++)
-    {
-      raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
-    }
+    vector<DynamicObstacle> observations;
+    current = current && getObservations(observations);
+    observations_ = observations;
+    current_ = current;
 
     // place the new obstacles into a priority queue... each with a priority of zero to begin with
     for (vector<DynamicObstacle>::const_iterator it = observations.begin(); it != observations.end(); ++it)
@@ -263,11 +229,21 @@ namespace prediction_layer
   {
     if (!footprint_clearing_enabled_) return;
     transformFootprint(robot_x, robot_y, robot_yaw, getFootprint(), transformed_footprint_);
-
+    
+    geometry_msgs::PolygonStamped polygon;
+    polygon.header.stamp = ros::Time::now();
+    polygon.header.frame_id = global_frame_;
+    
     for (unsigned int i = 0; i < transformed_footprint_.size(); i++)
     {
       touch(transformed_footprint_[i].x, transformed_footprint_[i].y, min_x, min_y, max_x, max_y);
+      geometry_msgs::Point32 point;
+      point.x = transformed_footprint_[i].x;
+      point.y = transformed_footprint_[i].y;
+      polygon.polygon.points.push_back(point);
     }
+
+    pub_transformed_footprint_.publish(polygon);
   }
 
   void PredictionLayer::updateCosts(Costmap2D &master_grid, 
@@ -279,10 +255,6 @@ namespace prediction_layer
     if (!enabled_)
       return;
 
-    if (footprint_clearing_enabled_)
-    {
-      setConvexPolygonCost(transformed_footprint_, FREE_SPACE);
-    }
     unsigned int size_x = master_grid.getSizeInCellsX();
     unsigned int size_y = master_grid.getSizeInCellsX();
     double origin_x = master_grid.getOriginX();
@@ -293,9 +265,9 @@ namespace prediction_layer
     for (auto obstacle : observations_.back().obs_)
     {
       unsigned int mx, my;
-      mx = (int)((obstacle.center.x - origin_x) / resolution);
-      my = (int)((obstacle.center.y - origin_y) / resolution);
-      if (obstacle.center.x < origin_x || obstacle.center.x < origin_y || mx > size_x || my > size_y)
+      mx = (unsigned int)((obstacle.center.x - origin_x) / resolution);
+      my = (unsigned int)((obstacle.center.y - origin_y) / resolution);
+      if (obstacle.center.x < origin_x || obstacle.center.y < origin_y || mx > size_x || my > size_y)
       {
         ROS_WARN("[PredcitionLayer] center pose x : %.5f, y : %.5f, mx : %d, my : %d",obstacle.center.x, obstacle.center.y, mx, my);
         continue;
@@ -312,9 +284,54 @@ namespace prediction_layer
           double dy = (double)my - (double)j;
           double sq_distance = dx*dx + dy*dy;
           if (sq_distance <= sq_radius)
-            master_grid.setCost(i,j, LETHAL_OBSTACLE);
+          {
+            master_grid.setCost(i,j, LETHAL_OBSTACLE);          
+          }
         }
       }
+    }
+    // PolygonBoundary boundary;
+    // for (auto polys : observations_.back().vel_boundary_)
+    // {
+    //   boundary.boundarys.push_back(polys);
+    // }
+    // pub_boundarys_.publish(boundary);
+
+    // // just for debug polygon shape
+    // geometry_msgs::PolygonStamped display_polygon;
+    // display_polygon.header.stamp = ros::Time::now();
+    // display_polygon.header.frame_id = global_frame_;
+    // display_polygon.polygon = observations_.back().vel_boundary_.back();
+    // pub_first_polygon_.publish(display_polygon);
+
+    try
+    {
+      // Fill out velocity polygons
+      for (auto polys : observations_.back().vel_boundary_)
+      {
+        vector<vector<int>> c_vp;
+        for (int k = 0; k < polys.points.size(); k++)
+        {
+          int mx, my;
+          mx = (int)((polys.points[k].x - origin_x) / resolution);
+          my = (int)((polys.points[k].y - origin_y) / resolution);
+          vector<int> p = {mx, my};
+          c_vp.push_back(p);
+        }
+
+        for (int i = 0; i < size_x; i++)
+        {
+          for (int j = 0; j < size_y; j++)
+          {
+            if (isPointInsidePolygon(c_vp, {i, j}))
+              master_grid.setCost(i,j, INSCRIBED_INFLATED_OBSTACLE);
+          }
+        }
+      }
+    }
+    catch (exception ex)
+    {
+      ROS_WARN("[PredictionLayer] %s", ex.what());
     }
 
     // Apply combination method
@@ -329,6 +346,33 @@ namespace prediction_layer
       default:  // Nothing
         break;
     }
+
+    if (footprint_clearing_enabled_)
+    {
+      // init footprint to cell index
+      vector<vector<int>> c_fp;
+      for (int k = 0; k < transformed_footprint_.size(); k++)
+      {
+        int mx, my;
+        mx = (int)((transformed_footprint_[k].x - origin_x) / resolution);
+        my = (int)((transformed_footprint_[k].y - origin_y) / resolution);
+        vector<int> p = {mx, my};
+        c_fp.push_back(p);
+      }
+
+      // find which cell is inside footprint
+      for (int i = 0; i < size_x; i++)
+      {
+        for (int j = 0; j < size_y; j++)
+        {
+          if (isPointInsidePolygon(c_fp, {i,j}))
+          {
+            master_grid.setCost(i,j, FREE_SPACE); // INSCRIBED_INFLATED_OBSTACLE ,FREE_SPACE
+          }
+        }
+      }
+    }
+
     ROS_DEBUG_COND(debug_mode_, "[updateBounds] buffer to updateCost : %.6f", (ros::Time::now() - observations_.back().updated_time_).toSec());
     ROS_DEBUG_COND(debug_mode_, "[updateBounds] publish to buffer : %.6f", observations_.back().pub_to_buf_);
     ros::Time e_t = ros::Time::now();
@@ -336,116 +380,18 @@ namespace prediction_layer
     ROS_DEBUG_COND(debug_mode_,"[updateCosts] %.6f", c_t);
   }
 
-  bool PredictionLayer::getMarkingObservations(vector<DynamicObstacle>& marking_observations) const
+  bool PredictionLayer::getObservations(vector<DynamicObstacle>& observations) const
   {
     bool current = true;
-    // get the marking observations
-    for (unsigned int i = 0; i < marking_buffers_.size(); ++i)
+    for (unsigned int i = 0; i < observation_buffers_.size(); ++i)
     {
-      // marking_buffers_[i]->lock();
-      marking_buffers_[i]->getObstacles(marking_observations);
-      current = marking_buffers_[i]->isCurrent() && current;
-      // marking_buffers_[i]->unlock();
+      observation_buffers_[i]->lock();
+      observation_buffers_[i]->getObstacles(observations);
+      current = observation_buffers_[i]->isCurrent() && current;
+      observation_buffers_[i]->unlock();
     }
-    // ROS_WARN("[PredictionLayer] get MarkingObservations size of marking observation : %d", marking_observations.size());
-    marking_observations.insert(marking_observations.end(),
-                                static_marking_observations_.begin(), static_marking_observations_.end());
-    ROS_DEBUG_NAMED("size","[getMarkingObservations] marking_observations size : %ld", marking_observations.size());
+    observations.insert(observations.end(), observations.begin(), observations.end());
     return current;
-  }
-
-  bool PredictionLayer::getClearingObservations(vector<DynamicObstacle>& clearing_observations) const
-  {
-    bool current = true;
-    // get the clearing observations
-    for (unsigned int i = 0; i < clearing_buffers_.size(); ++i)
-    {
-      // clearing_buffers_[i]->lock();
-      clearing_buffers_[i]->getObstacles(clearing_observations);
-      current = clearing_buffers_[i]->isCurrent() && current;
-      // clearing_buffers_[i]->unlock();
-    }
-    clearing_observations.insert(clearing_observations.end(),
-                                 static_clearing_observations_.begin(), static_clearing_observations_.end());
-    ROS_DEBUG_NAMED("size", "[getClearObservations] clearing_observation size : %ld", clearing_observations.size());
-    return current;
-  }
-
-  void PredictionLayer::raytraceFreespace(const DynamicObstacle& clearing_observation,
-                                          double* min_x, double* min_y, double* max_x, double* max_y)
-  {
-    double ox = clearing_observation.origin_.x;
-    double oy = clearing_observation.origin_.y;
-    const vector<CircleObstacle>& obj = clearing_observation.obs_;
-
-    // get the map coordinates of the origin of the sensor
-    unsigned int x0, y0;
-    if (!worldToMap(ox, oy, x0, y0))
-    {
-      ROS_WARN_THROTTLE(
-        1.0, "[PredictionLayer] The origin for the sensor at (%.2f, %.2f) is out of map bounds. So, the costmap cannot raytrace for it.",
-        ox, oy);
-      return;
-    }
-    double origin_x = origin_x_, origin_y = origin_y_;
-    double map_end_x = origin_x + size_x_ * resolution_;
-    double map_end_y = origin_y + size_y_ * resolution_;
-
-    touch(ox, oy, min_x, min_y, max_x, max_y);
-
-    // for each point in the obs, we want to trace a line from the origin and clear obstacles along it 
-    for (unsigned int i = 0; i < obj.size(); i++)
-    {
-      double wx = obj[i].center.x;
-      double wy = obj[i].center.y;
-
-      // now we also need to make sure that the enpoint we're raytracing
-      // to isn't off the costmap and scale if necessary
-      double a = wx - ox;
-      double b = wy - oy;
-      
-      // the minimum value to raytrace from is the origin
-      if (wx < origin_x)
-      {
-        double t = (origin_x - ox) / a;
-        wx = origin_x;
-        wy = oy + b * t;
-      }
-      if (wy < origin_y)
-      {
-        double t = (origin_y - oy) / b;
-        wx = ox + a * t;
-        wy = origin_y;
-      }
-
-      // the maximum value to raytrace to is the end of the map
-      if (wx > map_end_x)
-      {
-        double t = (map_end_x - ox) / a;
-        wx = map_end_x - .001;
-        wy = oy + b * t;
-      }
-      if (wy > map_end_y)
-      {
-        double t = (map_end_y - oy) / b;
-        wx = ox + a * t;
-        wy = map_end_y - .001;
-      }
-
-      // now that the vector is scaled correctly... we'll get the map coordinates of its endpoint
-      unsigned int x1, y1;
-
-      // check for legality just in case
-      if (!worldToMap(wx, wy, x1, y1))
-        continue;
-
-      unsigned int cell_raytrace_range = cellDistance(raytrace_range_);
-      Costmap2D::MarkCell marker(costmap_, FREE_SPACE);
-      // and finally... we can execute our trace to clear obstacles alone that line
-      Costmap2D::raytraceLine(marker, x0, y0, x1, y1, cell_raytrace_range);
-      
-      updateRaytraceBounds(ox, oy, wx, wy, raytrace_range_, min_x, min_y, max_x, max_y);
-    }
   }
 
   void PredictionLayer::activate()
