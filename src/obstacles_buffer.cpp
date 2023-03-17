@@ -37,7 +37,8 @@ const double PI = acos(-1);
 namespace prediction_layer
 {
   ObstaclesBuffer::ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
-                                   tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance) :
+                                   tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance
+                                   double weight_velocity, double weight_position_offset, double weight_collision_possibility) :
     tf2_buffer_(tf2_buffer), 
     observation_keep_time_(observation_keep_time),
     expected_update_rate_(expected_update_rate),
@@ -45,6 +46,9 @@ namespace prediction_layer
     source_frame_(source_frame),
     global_frame_(global_frame),
     tf_tolerance_(tf_tolerance),
+    weight_velocity_(weight_velocity),
+    weight_position_offset_(weight_position_offset),
+    weight_collision_possibility_(weight_collision_possibility),
     last_updated_(ros::Time::now())
   {
   }
@@ -56,14 +60,15 @@ namespace prediction_layer
   void ObstaclesBuffer::bufferObstacles(const Obstacles& obs)
   {
     ros::Time start_t = ros::Time::now();
-    ROS_DEBUG_NAMED("cycleTime","[bufferObstacles] time diff during buffer and publsh : %.6f", (start_t - obs.header.stamp).toSec());
+    ROS_DEBUG_NAMED("ObstacleBuffer.cycleTime","[bufferObstacles] time diff during buffer and publsh : %.6f", (start_t - obs.header.stamp).toSec());
     // init update target
     geometry_msgs::TransformStamped transform;
     string origin_frame = source_frame_ == "" ? obs.header.frame_id : source_frame_;
     geometry_msgs::Point local_origin, global_origin;
     
     // add vel polygon
-    vector<geometry_msgs::Polygon> vel_polygon;
+    // vector<geometry_msgs::Polygon> vel_polygon;
+    vector<vector<geometry_msgs::Point>> vel_polygon;
     
     Obstacles transformed_obs = obs;
     observation_list_.push_front(DynamicObstacle());
@@ -111,6 +116,7 @@ namespace prediction_layer
     // add vel polygon
     setVelocityToPolygon(transformed_obs.circles, vel_polygon);
     observation_list_.front().vel_boundary_ = vel_polygon;
+    observation_list_.front().calculateBoundingBox();
     while (true)
     {
       if (observation_list_.size() <= 2)
@@ -136,10 +142,7 @@ namespace prediction_layer
     for (obs_it = observation_list_.begin(); obs_it != observation_list_.end(); obs_it++)
     {
       if (obs_it->transformed_ == false)
-      {
-        ROS_DEBUG_NAMED("transform_check","[observationBuffer] not transfromed data is alive");
         continue;
-      }
       dynamic_obstacles.push_back(*obs_it);
     }
   }
@@ -199,16 +202,14 @@ namespace prediction_layer
   }
 
   void ObstaclesBuffer::setVelocityToPolygon(const vector<CircleObstacle>& obs_vec,
-                                            vector<geometry_msgs::Polygon>& polygons)
+                                            vector<vector<geometry_msgs::Point>>& polygons)
   {
     for (auto& obs : obs_vec)
     {
       bool is_closing = true;
       double pos_x, pos_y;
       double vel_x, vel_y;
-      geometry_msgs::Polygon vel_polygon;
-      // vel_polygon.header.stamp = ros::Time::now();
-      // vel_polygon.header.frame_id = global_frame_;
+      vector<geometry_msgs::Point> vel_polygon;
 
       pos_x = obs.center.x;
       pos_y = obs.center.y;
@@ -218,17 +219,21 @@ namespace prediction_layer
       double vel_radius, vel_scalar;
       double vel_theta;
       vel_radius = obs.radius;
-      vel_scalar = sqrt(vel_x*vel_x + vel_y*vel_y);
+      vel_scalar = hypot(vel_x, vel_y);
       if (vel_scalar < vel_radius)
       {
         vel_x = vel_x / vel_scalar * vel_radius;
         vel_y = vel_y / vel_scalar * vel_radius;
       }
+      double w_dist, w_vel, w_correlation;
+      w_dist = 10.0;
+      w_vel = 10.0;
+      w_correlation = 1.0;
 
       vel_theta = atan2(vel_x, vel_y);
       // vel_theta = PI - vel_theta;
 
-      geometry_msgs::Point32 p1, p2, p3, p4;
+      geometry_msgs::Point p1, p2, p3, p4;
       p1.x = pos_x - vel_radius*cos(vel_theta);
       p1.y = pos_y + vel_radius*sin(vel_theta);
 
@@ -241,10 +246,10 @@ namespace prediction_layer
       p4.x = pos_x + vel_x - vel_radius*cos(vel_theta);
       p4.y = pos_y + vel_y + vel_radius*sin(vel_theta);
       
-      vel_polygon.points.push_back(p1);
-      vel_polygon.points.push_back(p2);
-      vel_polygon.points.push_back(p3);
-      vel_polygon.points.push_back(p4);
+      vel_polygon.push_back(p1);
+      vel_polygon.push_back(p2);
+      vel_polygon.push_back(p3);
+      vel_polygon.push_back(p4);
       polygons.push_back(vel_polygon);
     }
   }

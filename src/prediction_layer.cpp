@@ -77,7 +77,7 @@ namespace prediction_layer
 
     double observation_keep_time, expected_update_rate;
     string topic, source_frame;
-    debug_mode_ = false;
+    debug_mode_ = true;
 
     nh.getParam("object_source", topic);
     nh.getParam("source_frame", source_frame);
@@ -112,7 +112,7 @@ namespace prediction_layer
 
     // create a callback for the topic
     boost::shared_ptr < message_filters::Subscriber<Obstacles>
-      > sub(new message_filters::Subscriber<Obstacles>(g_nh, topic, 50));
+      > sub(new message_filters::Subscriber<Obstacles>(g_nh, topic, 1));
     boost::shared_ptr < tf2_ros::MessageFilter<Obstacles>
       > filter(new tf2_ros::MessageFilter<Obstacles>(*sub, *tf_, global_frame_, 50, g_nh));
     filter->registerCallback(
@@ -169,7 +169,7 @@ namespace prediction_layer
     initialize_ = true;
     ros::Time e_t = ros::Time::now();
     double c_t = (e_t - s_t).toSec();
-    ROS_DEBUG_COND(debug_mode_,"[obstacleCallback] %.6f", c_t);
+    ROS_DEBUG_NAMED("cycleTime","[obstacleCallback] %.6f", c_t);
   }
 
   void PredictionLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
@@ -221,7 +221,7 @@ namespace prediction_layer
     updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
     ros::Time e_t = ros::Time::now();
     double c_t = (e_t - s_t).toSec();
-    ROS_DEBUG_COND(debug_mode_,"[updateBounds] %.6f", c_t);
+    ROS_DEBUG_NAMED("cycleTime","[updateBounds] %.6f", c_t);
   }
 
   void PredictionLayer::updateFootprint(double robot_x, double robot_y, double robot_yaw,
@@ -254,85 +254,41 @@ namespace prediction_layer
       return;
     if (!enabled_)
       return;
+    // update local costmap values
+    size_x_ = master_grid.getSizeInCellsX();
+    size_y_ = master_grid.getSizeInCellsX();
 
-    unsigned int size_x = master_grid.getSizeInCellsX();
-    unsigned int size_y = master_grid.getSizeInCellsX();
-    double origin_x = master_grid.getOriginX();
-    double origin_y = master_grid.getOriginY();
-    double resolution = master_grid.getResolution();
-
-    // Fill out circle obstacles
-    for (auto obstacle : observations_.back().obs_)
+    // fill out circles
+    vector<CircleObstacle>& obstacle = observations_.back().obs_;
+    for (auto& obs : obstacle)
     {
-      unsigned int mx, my;
-      mx = (unsigned int)((obstacle.center.x - origin_x) / resolution);
-      my = (unsigned int)((obstacle.center.y - origin_y) / resolution);
-      if (obstacle.center.x < origin_x || obstacle.center.y < origin_y || mx > size_x || my > size_y)
+      unsigned int mx, my, mr;
+      master_grid.worldToMap(obs.center.x, obs.center.y, mx, my);
+      mr = master_grid.cellDistance(obs.radius);
+      int p_dx, m_dx, p_dy, m_dy;
+      p_dx = ((int)mx + (int)mr < size_x_) ? (int)mx + (int)mr : size_x_;
+      p_dy = ((int)my + (int)mr < size_y_) ? (int)my + (int)mr : size_y_;
+      m_dx = ((int)mx - (int)mr < size_x_) ? (int)mx - (int)mr : size_x_;
+      m_dy = ((int)my - (int)mr < size_y_) ? (int)my - (int)mr : size_y_;
+      for (int x = m_dx; x <= p_dx; x++)
       {
-        ROS_WARN("[PredcitionLayer] center pose x : %.5f, y : %.5f, mx : %d, my : %d",obstacle.center.x, obstacle.center.y, mx, my);
-        continue;
-      }
-
-      // Fill out obstacle circle
-      double radius = obstacle.radius / resolution;
-      double sq_radius = radius * radius;
-      for (unsigned int i = 0; i < size_x; i++)
-      {
-        for (unsigned int j = 0; j < size_y; j++)
+        for (int y = m_dy; y <= p_dy; y++)
         {
-          double dx = (double)mx - (double)i;
-          double dy = (double)my - (double)j;
-          double sq_distance = dx*dx + dy*dy;
-          if (sq_distance <= sq_radius)
-          {
-            master_grid.setCost(i,j, LETHAL_OBSTACLE);          
-          }
+          double dist = hypot(x - (int)mx, y - (int)my);
+          if (dist <= mr)
+            master_grid.setCost(x,y, LETHAL_OBSTACLE);
         }
       }
     }
-    // PolygonBoundary boundary;
-    // for (auto polys : observations_.back().vel_boundary_)
-    // {
-    //   boundary.boundarys.push_back(polys);
-    // }
-    // pub_boundarys_.publish(boundary);
 
-    // // just for debug polygon shape
-    // geometry_msgs::PolygonStamped display_polygon;
-    // display_polygon.header.stamp = ros::Time::now();
-    // display_polygon.header.frame_id = global_frame_;
-    // display_polygon.polygon = observations_.back().vel_boundary_.back();
-    // pub_first_polygon_.publish(display_polygon);
-
-    try
+    // fill out boundarys
+    vector<vector<geometry_msgs::Point>>& polys = observations_.back().vel_boundary_;
+    for (auto& points : polys)
     {
-      // Fill out velocity polygons
-      for (auto polys : observations_.back().vel_boundary_)
-      {
-        vector<vector<int>> c_vp;
-        for (int k = 0; k < polys.points.size(); k++)
-        {
-          int mx, my;
-          mx = (int)((polys.points[k].x - origin_x) / resolution);
-          my = (int)((polys.points[k].y - origin_y) / resolution);
-          vector<int> p = {mx, my};
-          c_vp.push_back(p);
-        }
-
-        for (int i = 0; i < size_x; i++)
-        {
-          for (int j = 0; j < size_y; j++)
-          {
-            if (isPointInsidePolygon(c_vp, {i, j}))
-              master_grid.setCost(i,j, INSCRIBED_INFLATED_OBSTACLE);
-          }
-        }
-      }
+      master_grid.setConvexPolygonCost(points, LETHAL_OBSTACLE);
     }
-    catch (exception ex)
-    {
-      ROS_WARN("[PredictionLayer] %s", ex.what());
-    }
+    if (footprint_clearing_enabled_)
+      master_grid.setConvexPolygonCost(transformed_footprint_, FREE_SPACE);
 
     // Apply combination method
     switch (combination_method_)
@@ -347,37 +303,11 @@ namespace prediction_layer
         break;
     }
 
-    if (footprint_clearing_enabled_)
-    {
-      // init footprint to cell index
-      vector<vector<int>> c_fp;
-      for (int k = 0; k < transformed_footprint_.size(); k++)
-      {
-        int mx, my;
-        mx = (int)((transformed_footprint_[k].x - origin_x) / resolution);
-        my = (int)((transformed_footprint_[k].y - origin_y) / resolution);
-        vector<int> p = {mx, my};
-        c_fp.push_back(p);
-      }
-
-      // find which cell is inside footprint
-      for (int i = 0; i < size_x; i++)
-      {
-        for (int j = 0; j < size_y; j++)
-        {
-          if (isPointInsidePolygon(c_fp, {i,j}))
-          {
-            master_grid.setCost(i,j, FREE_SPACE); // INSCRIBED_INFLATED_OBSTACLE ,FREE_SPACE
-          }
-        }
-      }
-    }
-
-    ROS_DEBUG_COND(debug_mode_, "[updateBounds] buffer to updateCost : %.6f", (ros::Time::now() - observations_.back().updated_time_).toSec());
-    ROS_DEBUG_COND(debug_mode_, "[updateBounds] publish to buffer : %.6f", observations_.back().pub_to_buf_);
+    ROS_DEBUG_NAMED("bufferToUpdateCost", "[updateBounds] buffer to updateCost : %.6f", (ros::Time::now() - observations_.back().updated_time_).toSec());
+    ROS_DEBUG_NAMED("pubToBuffer", "[updateBounds] publish to buffer : %.6f", observations_.back().pub_to_buf_);
     ros::Time e_t = ros::Time::now();
     double c_t = (e_t - s_t).toSec();
-    ROS_DEBUG_COND(debug_mode_,"[updateCosts] %.6f", c_t);
+    ROS_DEBUG_NAMED("cycleTime","[updateCosts] %.6f", c_t);
   }
 
   bool PredictionLayer::getObservations(vector<DynamicObstacle>& observations) const
