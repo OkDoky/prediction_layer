@@ -168,6 +168,64 @@ namespace prediction_layer
         }
       }
 
+      inline bool isPointInsidePolygon(const vector<geometry_msgs::Point>& polygon,
+                                       int i, int j)
+      {
+        vector<vector<int>> c_fp;
+        for (auto& p : polygon)
+        {
+          int mx, my;
+          mx = (int)((p.x - origin_x_) / resolution_);
+          my = (int)((p.y - origin_y_) / resolution_);
+          vector<int> fp = {mx, my};
+          c_fp.push_back(fp);
+        }
+        return isPointInsidePolygon(c_fp, {i,j});
+      }
+
+      inline bool isPointInsidePolygons(const vector<geometry_msgs::Polygon>& polygons,
+                                        int i, int j)
+      {
+        bool isOccupied = false;
+        for (auto& polys : polygons)
+        {
+          vector<vector<int>> c_vp;
+          for (auto& p : polys.points)
+          {
+            int mx, my;
+            mx = (int)((p.x - origin_x_) / resolution_);
+            my = (int)((p.y - origin_y_) / resolution_);
+            vector<int> vp = {mx, my};
+            c_vp.push_back(vp);
+          }
+          isOccupied = isPointInsidePolygon(c_vp, {i,j});
+          if (isOccupied)
+            return isOccupied; 
+        }
+        return isOccupied;
+      }
+
+      inline bool isPointInsideCircles(const vector<CircleObstacle>& obs,
+                                       int i, int j)
+      {
+        for (auto& obstacle : obs)
+        {
+          int mx, my;
+          mx = (int)((obstacle.center.x - origin_x_) / resolution_);
+          my = (int)((obstacle.center.y - origin_y_) / resolution_);
+          if (mx < 0 || my < 0 || mx > size_x_ || my > size_y_)
+            continue;
+          double radius = obstacle.radius / resolution_;
+          double sq_radius = radius*radius;
+          double dx = (double)mx - (double)i;
+          double dy = (double)my - (double)j;
+          double sq_dist = dx*dx + dy*dy;
+          if (sq_dist <= sq_radius)
+            return true;
+        }
+        return false;
+      }
+
       vector<geometry_msgs::Point> transformed_footprint_;
       bool footprint_clearing_enabled_;
       string global_frame_;
@@ -198,6 +256,10 @@ namespace prediction_layer
       // for debug boundary
       ros::Publisher pub_boundarys_;
       ros::Publisher pub_first_polygon_;
+
+      // costmap values
+      unsigned int size_x_, size_y_;
+      double origin_x_, origin_y_, resolution_;
   };
 }
 #endif
