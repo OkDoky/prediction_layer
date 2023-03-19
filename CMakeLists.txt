@@ -36,6 +36,16 @@ generate_dynamic_reconfigure_options(
   cfg/PredictionLayer.cfg
 )
 
+add_message_files(
+  FILES
+  PolygonBoundary.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  geometry_msgs
+)
+
 catkin_package(
  INCLUDE_DIRS 
   include
@@ -63,7 +73,6 @@ catkin_package(
 ###########
 ## Build ##
 ###########
-
 include_directories(
   include
   ${catkin_INCLUDE_DIRS} 
@@ -75,6 +84,17 @@ add_library(
   src/prediction_layer.cpp
   src/obstacles_buffer.cpp
 )
+
+#
+# Build rviz plugins
+#
+# add_library(
+#   ${PROJECT_NAME}_display
+#   src/display/boundary_visual.cpp include/${PROJECT_NAME}/display/boundary_visual.h
+# )
+# target_link_libraries(${PROJECT_NAME}_display ${catkin_LIBRARIES})
+# add_dependencies(${PROJECT_NAME}_display ${catkin_EXPORTED_TARGETS})
+
 target_link_libraries(
   prediction_layer 
   ${catkin_LIBRARIES}

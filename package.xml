@@ -10,6 +10,7 @@
 
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>costmap_2d</build_depend>
+  <build_depend>message_generation</build_depend>
   <build_depend>dynamic_reconfigure</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>pluginlib</build_depend>
@@ -58,5 +59,6 @@
 
   <export>
     <costmap_2d plugin="${prefix}/costmap_plugins.xml"/>
+    <!-- <rviz plugin="${prefix}/rviz_plugins.xml"/> -->
   </export>
 </package>
