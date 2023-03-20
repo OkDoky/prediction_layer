@@ -67,9 +67,12 @@ namespace prediction_layer
        * @param global_frame The frame to transform Obstacles
        * @param source_frame The frame of the origin objects, can be left blank to be read from the messages.
        * @param tf_tolerance The amount of time to wait for a transform to be available when setting a new global frame
+       * @param weight_velocity The Weight for velocity of object from robot
+       * @param weight_position_offset The value of euclidien distance from robot to object
+       * @param weight_collision_possibility The Weight for collision check for object and robot path
        */
       ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
-                      tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance
+                      tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance,
                       double weight_velocity, double weight_position_offset, double weight_collision_possibility);
       
       /**
