@@ -37,7 +37,7 @@ const double PI = acos(-1);
 namespace prediction_layer
 {
   ObstaclesBuffer::ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
-                                   tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance
+                                   tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance,
                                    double weight_velocity, double weight_position_offset, double weight_collision_possibility) :
     tf2_buffer_(tf2_buffer), 
     observation_keep_time_(observation_keep_time),
@@ -218,7 +218,7 @@ namespace prediction_layer
 
       double vel_radius, vel_scalar;
       double vel_theta;
-      vel_radius = obs.radius;
+      vel_radius = obs.true_radius;
       vel_scalar = hypot(vel_x, vel_y);
       if (vel_scalar < vel_radius)
       {

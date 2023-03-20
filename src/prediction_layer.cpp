@@ -76,6 +76,7 @@ namespace prediction_layer
     ROS_INFO("  Subscribed to Topics: %s", topics_string.c_str());
 
     double observation_keep_time, expected_update_rate;
+    double weight_velocity, weight_position_offset, weight_collision_possibility;
     string topic, source_frame;
     debug_mode_ = true;
 
@@ -85,6 +86,9 @@ namespace prediction_layer
     nh.getParam("expected_update_rate", expected_update_rate);
     nh.getParam("combination_method", combination_method_);
     nh.getParam("debug_mode", debug_mode_);
+    nh.getParam("weight_velocity", weight_velocity);
+    nh.getParam("weight_position_offet", weight_velocity);
+    nh.getParam("weight_collision_possibility", weight_collision_possibility);
     ROS_WARN("[PredictionLayer] object_source : %s",topic.c_str());
     ROS_WARN("[PredictionLayer] source_frame : %s",source_frame.c_str());
     ROS_WARN("[PredictionLayer] observation_persistence : %.2f",observation_keep_time);
@@ -99,7 +103,9 @@ namespace prediction_layer
       observation_buffers_.push_back(
         boost::shared_ptr<ObstaclesBuffer
             > (new ObstaclesBuffer(topic, observation_keep_time, expected_update_rate,
-                                   *tf_, global_frame_,source_frame, transform_tolerance)));
+                                   *tf_, global_frame_,source_frame, transform_tolerance,
+                                   weight_velocity, weight_position_offset,
+                                   weight_collision_possibility)));
     }
     catch (exception ex)
     {
@@ -141,8 +147,9 @@ namespace prediction_layer
     reset_layer_ = nh.advertiseService("reset_layer", &PredictionLayer::resetLayerCallback, this);
     ROS_WARN("[PredictionLayer] succeded to init prediction layer");
     pub_transformed_footprint_ = nh.advertise<geometry_msgs::PolygonStamped>("transformed_footprint", 10);
-    pub_boundarys_ = nh.advertise<prediction_layer::PolygonBoundary>("velocity_boundarys", 10);
-    pub_first_polygon_ = nh.advertise<geometry_msgs::PolygonStamped>("first_boundarys", 10);
+    // pub_boundarys_ = nh.advertise<prediction_layer::PolygonBoundary>("velocity_boundarys", 10);
+    // pub_first_polygon_ = nh.advertise<geometry_msgs::PolygonStamped>("first_boundarys", 10);
+    ROS_WARN("[PredictionLayer] init prediction layer");
   }
 
   void PredictionLayer::setupDynamicReconfigure(ros::NodeHandle& nh)
@@ -264,7 +271,7 @@ namespace prediction_layer
     {
       unsigned int mx, my, mr;
       master_grid.worldToMap(obs.center.x, obs.center.y, mx, my);
-      mr = master_grid.cellDistance(obs.radius);
+      mr = master_grid.cellDistance(obs.true_radius);
       int p_dx, m_dx, p_dy, m_dy;
       p_dx = ((int)mx + (int)mr < size_x_) ? (int)mx + (int)mr : size_x_;
       p_dy = ((int)my + (int)mr < size_y_) ? (int)my + (int)mr : size_y_;
