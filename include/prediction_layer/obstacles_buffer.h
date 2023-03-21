@@ -101,6 +101,14 @@ namespace prediction_layer
        * @param obstacles The vector to be filled
        */
       void getObstacles(vector<DynamicObstacle>& dynamic_obstacles);
+
+      /**
+       * @brief Transform obs data from source_frame to global_frame
+       * 
+       * @param obs source_frame obstacle data
+       * @param source_frame obstacle data frame id
+       */
+      void transformObstacles(const Obstacles& obs, string source_frame);
       
       /**
        * @brief Check if the obstacle buffer is being update at its expected rate

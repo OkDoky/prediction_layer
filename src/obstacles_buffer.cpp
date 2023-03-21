@@ -62,12 +62,9 @@ namespace prediction_layer
     ros::Time start_t = ros::Time::now();
     ROS_DEBUG_NAMED("ObstacleBuffer.cycleTime","[bufferObstacles] time diff during buffer and publsh : %.6f", (start_t - obs.header.stamp).toSec());
     // init update target
-    geometry_msgs::TransformStamped transform;
     string origin_frame = source_frame_ == "" ? obs.header.frame_id : source_frame_;
-    geometry_msgs::Point local_origin, global_origin;
     
     // add vel polygon
-    // vector<geometry_msgs::Polygon> vel_polygon;
     vector<vector<geometry_msgs::Point>> vel_polygon;
     
     Obstacles transformed_obs = obs;
@@ -75,43 +72,7 @@ namespace prediction_layer
     observation_list_.front().obs_ = transformed_obs.circles;
     observation_list_.front().seq_ = obs.header.seq;
     observation_list_.front().pub_to_buf_ = (ros::Time::now() - obs.header.stamp).toSec();
-    
-    // add vel polygon
     observation_list_.front().vel_boundary_ = vel_polygon;
-
-    // get lookuptransform form tf_buffer
-    try
-    {
-      transform = tf2_buffer_.lookupTransform(global_frame_, origin_frame, obs.header.stamp, ros::Duration(tf_tolerance_));
-    } 
-    catch(TransformException& ex)
-    {
-      ROS_WARN("[bufferObstacles] cannot Transform %s to %s, %s",origin_frame.c_str(), global_frame_.c_str(), ex.what());
-      observation_list_.pop_front();
-      return;
-    }
-
-    try
-    {
-      doTransform(local_origin, observation_list_.front().origin_, transform);
-
-      for (auto& circle : observation_list_.front().obs_)
-      {
-        geometry_msgs::Point transformed_center;
-        geometry_msgs::Vector3 transformed_velocity;
-        doTransform(circle.center, transformed_center, transform);
-        doTransform(circle.velocity, transformed_velocity, transform);
-        circle.center = transformed_center;
-        circle.velocity = transformed_velocity;
-      }
-    }
-    catch (TransformException& ex)
-    {
-      ROS_ERROR("[PredictionLayer] TF Exception that should never happen for sensor frame: %s, obs frame: %s, %s", 
-                source_frame_.c_str(), obs.header.frame_id.c_str(), ex.what());
-      observation_list_.pop_front();
-      return;
-    }
 
     // add vel polygon
     setVelocityToPolygon(transformed_obs.circles, vel_polygon);
@@ -147,6 +108,45 @@ namespace prediction_layer
     }
   }
   
+  void ObstaclesBuffer::transformObstacles(const Obstacles& obs, string source_frame)
+  {
+    geometry_msgs::TransformStamped transform;
+    // geometry_msgs::Point local_origin;
+    // get lookuptransform form tf_buffer
+    try
+    {
+      transform = tf2_buffer_.lookupTransform(global_frame_, source_frame, obs.header.stamp, ros::Duration(tf_tolerance_));
+    } 
+    catch(TransformException& ex)
+    {
+      ROS_WARN("[bufferObstacles] cannot Transform %s to %s, %s",source_frame.c_str(), global_frame_.c_str(), ex.what());
+      observation_list_.pop_front();
+      return;
+    }
+
+    try
+    {
+      // doTransform(local_origin, observation_list_.front().origin_, transform);
+
+      for (auto& circle : observation_list_.front().obs_)
+      {
+        geometry_msgs::Point transformed_center;
+        geometry_msgs::Vector3 transformed_velocity;
+        doTransform(circle.center, transformed_center, transform);
+        doTransform(circle.velocity, transformed_velocity, transform);
+        circle.center = transformed_center;
+        circle.velocity = transformed_velocity;
+      }
+    }
+    catch (TransformException& ex)
+    {
+      ROS_ERROR("[PredictionLayer] TF Exception that should never happen for sensor frame: %s, obs frame: %s, %s", 
+                source_frame.c_str(), obs.header.frame_id.c_str(), ex.what());
+      observation_list_.pop_front();
+      return;
+    }
+  }
+
   bool ObstaclesBuffer::isCurrent() const
   {
     if (expected_update_rate_ == ros::Duration(0.0))
