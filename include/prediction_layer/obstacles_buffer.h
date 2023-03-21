@@ -38,8 +38,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/buffer.h>
 #include <tf2/transform_datatypes.h>
-#include <geometry_msgs/Polygon.h>
-#include <geometry_msgs/Point32.h>
+#include <geometry_msgs/Point.h>
 
 // Thread support
 #include <boost/thread.hpp>
@@ -68,9 +67,13 @@ namespace prediction_layer
        * @param global_frame The frame to transform Obstacles
        * @param source_frame The frame of the origin objects, can be left blank to be read from the messages.
        * @param tf_tolerance The amount of time to wait for a transform to be available when setting a new global frame
+       * @param weight_velocity The Weight for velocity of object from robot
+       * @param weight_position_offset The value of euclidien distance from robot to object
+       * @param weight_collision_possibility The Weight for collision check for object and robot path
        */
       ObstaclesBuffer(string topic_name, double observation_keep_time, double expected_update_rate,
-                      tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance);
+                      tf2_ros::Buffer& tf2_buffer, string global_frame, string source_frame, double tf_tolerance,
+                      double weight_velocity, double weight_position_offset, double weight_collision_possibility);
       
       /**
        * @brief Destroy the Obstacles Buffer object
@@ -148,7 +151,7 @@ namespace prediction_layer
        * @param polygons to fill out from velocity to make polygon
        */
       void setVelocityToPolygon(const vector<CircleObstacle>& obs_vec,
-                                vector<geometry_msgs::Polygon>& polygons);
+                                vector<vector<geometry_msgs::Point>>& polygons);
 
       tf2_ros::Buffer& tf2_buffer_;
       const ros::Duration observation_keep_time_;
@@ -161,6 +164,8 @@ namespace prediction_layer
       string topic_name_;
       boost::recursive_mutex lock_;
       double tf_tolerance_;
+
+      double weight_velocity_, weight_position_offset_, weight_collision_possibility_;
   };
 }
 #endif  // OBSTACLES_BUFFER_H_

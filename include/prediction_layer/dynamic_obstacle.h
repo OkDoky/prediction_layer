@@ -38,6 +38,7 @@
 #include <obstacle_detector/CircleObstacle.h>
 
 using namespace obstacle_detector;
+using namespace std;
 
 namespace prediction_layer
 {
@@ -59,14 +60,44 @@ namespace prediction_layer
     }
 
     geometry_msgs::Point origin_;
-    std::vector<CircleObstacle> obs_;
+    vector<CircleObstacle> obs_;
     ros::Time updated_time_;
     uint32_t seq_;
     bool transformed_;
     double pub_to_buf_;
 
     // add velocity boundary
-    std::vector<geometry_msgs::Polygon> vel_boundary_; 
+    // vector<geometry_msgs::Polygon> vel_boundary_; 
+    vector<vector<geometry_msgs::Point>> vel_boundary_;
+    // New member variables for bounding box
+    geometry_msgs::Point min_bound_;
+    geometry_msgs::Point max_bound_;
+    
+    // Function to calculate the bounding box
+    void calculateBoundingBox()
+    {
+      double min_x = numeric_limits<double>::max();
+      double min_y = numeric_limits<double>::max();
+      double max_x = numeric_limits<double>::min();
+      double max_y = numeric_limits<double>::min();
+      
+      for(const auto& obs : obs_)
+      {
+        double radius = obs.radius;
+        double x = obs.center.x;
+        double y = obs.center.y;
+        
+        if(x - radius < min_x) min_x = x - radius;
+        if(x + radius > max_x) max_x = x + radius;
+        if(y - radius < min_y) min_y = y - radius;
+        if(y + radius > max_y) max_y = y + radius;
+      }
+      
+      min_bound_.x = min_x;
+      min_bound_.y = min_y;
+      max_bound_.x = max_x;
+      max_bound_.y = max_y;
+    }
   };  // class DynamicObstacles
 
 }  // namespace prediction_layer

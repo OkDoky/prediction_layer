@@ -58,5 +58,6 @@
 
   <export>
     <costmap_2d plugin="${prefix}/costmap_plugins.xml"/>
+    <!-- <rviz plugin="${prefix}/rviz_plugins.xml"/> -->
   </export>
 </package>
